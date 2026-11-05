@@ -45,3 +45,5 @@ jobs:
       # 6. Black orqali formatni tekshirish
       - name: Run Black
         run: poetry run black --check .
+
+        
