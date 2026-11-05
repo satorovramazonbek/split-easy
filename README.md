@@ -2,9 +2,20 @@
 
 **SplitEasy** — do'stlar, guruhdoshlar yoki xonadoshlar birgalikda qilgan xarajatlarni yozib boradigan va "kim kimga qancha qarzdor" ekanini avtomatik hisoblab beradigan veb-ilova (Splitwise'ning soddalashtirilgan varianti).
 
-> **Misol:** 4 do'st sayohatga chiqdi. Ali mehmonxonaga 400 000 so'm, Vali taksiga 100 000 so'm, Sardor ovqatga 300 000 so'm to'ladi. Ilova eng kam sondagi to'lov bilan hammani hisob-kitob qilib beradi: *"Dilshod → Ali: 150 000 so'm"*.
+> **Misol:** 4 do'st sayohatga chiqdi. Ali mehmonxonaga 400 000 so'm, Vali taksiga 100 000 so'm, Sardor ovqatga 300 000 so'm to'ladi. Ilova eng kam sondagi to'lov bilan hammani hisob-kitob qilib beradi: *"Dilshod → Ali: 200 000 so'm"* va *"Vali → Sardor: 100 000 so'm"*.
 
 Loyiha "Dasturiy ta'minot loyihalash va testlash" fanidan amaliy loyiha sifatida ishlab chiqilmoqda.
+
+## Mundarija
+
+- [Imkoniyatlar](#imkoniyatlar)
+- [Texnologiyalar](#texnologiyalar)
+- [Arxitektura](#arxitektura)
+- [Loyiha tuzilmasi](#loyiha-tuzilmasi)
+- [O'rnatish va ishga tushirish](#ornatish-va-ishga-tushirish)
+- [Jamoa](#jamoa)
+- [Ish jarayoni (Git)](#ish-jarayoni-git)
+- [Hujjatlar](#hujjatlar)
 
 ---
 
@@ -30,7 +41,7 @@ Pul summalari faqat butun son (`int`, so'mda) bilan hisoblanadi — `float` ishl
 
 | Yo'nalish | Texnologiya |
 |---|---|
-| Dasturlash tili | Python 3.11+ |
+| Dasturlash tili | Python 3.12 |
 | Backend | FastAPI |
 | Ma'lumotlar bazasi / ORM | SQLite, SQLAlchemy 2.x |
 | Migratsiyalar | Alembic |
@@ -45,7 +56,7 @@ Pul summalari faqat butun son (`int`, so'mda) bilan hisoblanadi — `float` ishl
 
 ## Arxitektura
 
-Loyiha 4 qatlamli arxitekturaga ega. Qatlamlar faqat pastga bog'liq bo'lishi mumkin.
+Loyiha 4 qatlamli arxitekturaga ega. Barcha bog'liqliklar domain qatlami tomon yo'naladi.
 
 ```
 [ API / Web qatlami ]        FastAPI routerlar, Jinja2 sahifalar
@@ -59,11 +70,13 @@ Loyiha 4 qatlamli arxitekturaga ega. Qatlamlar faqat pastga bog'liq bo'lishi mum
 
 **Asosiy qoida:** domain qatlami FastAPI, SQLAlchemy yoki boshqa tashqi kutubxonani import qilmaydi. Servislar repository'larning abstrakt interfeysiga bog'liq.
 
-Qo'llanilgan design patternlar: **Strategy**, **Factory**, **Repository**, **Observer**, **Unit of Work**. Batafsil: [`docs/DESIGN.md`](docs/DESIGN.md).
+Qo'llanilgan design patternlar: **Strategy**, **Factory**, **Repository**, **Observer**, **Unit of Work**. Batafsil: [`DESIGN.md`](DESIGN.md).
 
 ---
 
 ## Loyiha tuzilmasi
+
+Rejalashtirilgan tuzilma (loyiha rivojlanishi bilan to'ldirib boriladi):
 
 ```
 split-easy/
@@ -79,8 +92,9 @@ split-easy/
 │   └── main.py
 ├── migrations/         # Alembic migratsiyalari
 ├── scripts/            # seed.py, benchmark.py
-├── docs/               # texnik topshiriq, DESIGN.md, DB.md, ERD
+├── docs/               # texnik topshiriq, DB.md, ERD
 ├── tests/              # unit va integratsion testlar
+├── DESIGN.md
 ├── pyproject.toml
 └── README.md
 ```
@@ -93,7 +107,7 @@ split-easy/
 
 ### 1. Talablar
 
-- Python 3.11 yoki undan yuqori
+- Python 3.12
 - Git
 - Poetry: `pip install poetry`
 
@@ -165,6 +179,6 @@ docs: add ERD and normalization analysis
 
 ## Hujjatlar
 
-- [`docs/texnik_topshiriq.pdf`](docs/texnik_topshiriq.pdf) — texnik topshiriq
-- [`docs/DESIGN.md`](docs/DESIGN.md) — arxitektura, design patternlar va SOLID printsiplari
-- [`docs/DB.md`](docs/DB.md) — ERD, normalizatsiya, indekslar, benchmark, tranzaksiyalar
+- [`docs/texnik_topshiriq.pdf.pdf`](docs/texnik_topshiriq.pdf.pdf) — texnik topshiriq
+- [`DESIGN.md`](DESIGN.md) — arxitektura, design patternlar va SOLID printsiplari
+- `docs/DB.md` (tayyorlanmoqda) — ERD, normalizatsiya, indekslar, benchmark, tranzaksiyalar
