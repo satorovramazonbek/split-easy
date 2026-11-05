@@ -9,6 +9,7 @@ from app.domain.split_strategies import (
     EqualSplitStrategy,
     ExactSplitStrategy,
     Participant,
+    PercentageSplitStrategy,
 )
 
 
@@ -100,3 +101,45 @@ def test_exact_split_allows_zero_share() -> None:
     shares = ExactSplitStrategy().split(100, [Participant(1, 100), Participant(2, 0)])
 
     assert amounts(shares) == {1: 100, 2: 0}
+
+
+# --- Percentage ----------------------------------------------------------
+
+
+def test_percentage_split_divides_by_percentages() -> None:
+    participants = [Participant(1, 50), Participant(2, 30), Participant(3, 20)]
+
+    shares = PercentageSplitStrategy().split(300000, participants)
+
+    assert amounts(shares) == {1: 150000, 2: 90000, 3: 60000}
+
+
+def test_percentage_split_accepts_decimal_percentages_and_keeps_total() -> None:
+    participants = [
+        Participant(1, Decimal("33.33")),
+        Participant(2, Decimal("33.33")),
+        Participant(3, Decimal("33.34")),
+    ]
+
+    shares = PercentageSplitStrategy().split(100, participants)
+
+    assert sum(amounts(shares).values()) == 100
+
+
+@pytest.mark.parametrize(
+    "values",
+    [[50, 30, 10], [50, 30, 30], [Decimal("99.99"), 0]],
+)
+def test_percentage_split_raises_error_when_sum_is_not_100(values: list) -> None:
+    participants = [Participant(i + 1, v) for i, v in enumerate(values)]
+
+    with pytest.raises(InvalidSplitError):
+        PercentageSplitStrategy().split(1000, participants)
+
+
+@pytest.mark.parametrize("value", [0, -10, None, 50.0, True])
+def test_percentage_split_raises_error_when_value_is_invalid(value: object) -> None:
+    participants = [Participant(1, 50), Participant(2, value)]  # type: ignore[arg-type]
+
+    with pytest.raises(InvalidSplitError):
+        PercentageSplitStrategy().split(1000, participants)
