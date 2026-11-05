@@ -10,6 +10,7 @@ from app.domain.split_strategies import (
     ExactSplitStrategy,
     Participant,
     PercentageSplitStrategy,
+    SharesSplitStrategy,
 )
 
 
@@ -143,3 +144,30 @@ def test_percentage_split_raises_error_when_value_is_invalid(value: object) -> N
 
     with pytest.raises(InvalidSplitError):
         PercentageSplitStrategy().split(1000, participants)
+
+
+# --- Shares --------------------------------------------------------------
+
+
+def test_shares_split_divides_proportionally() -> None:
+    participants = [Participant(1, 2), Participant(2, 1), Participant(3, 1)]
+
+    shares = SharesSplitStrategy().split(120000, participants)
+
+    assert amounts(shares) == {1: 60000, 2: 30000, 3: 30000}
+
+
+def test_shares_split_distributes_remainder_and_keeps_total() -> None:
+    participants = [Participant(1, 1), Participant(2, 1), Participant(3, 1)]
+
+    shares = SharesSplitStrategy().split(100, participants)
+
+    assert amounts(shares) == {1: 34, 2: 33, 3: 33}
+
+
+@pytest.mark.parametrize("value", [0, -1, None, 1.5])
+def test_shares_split_raises_error_when_share_is_invalid(value: object) -> None:
+    participants = [Participant(1, 1), Participant(2, value)]  # type: ignore[arg-type]
+
+    with pytest.raises(InvalidSplitError):
+        SharesSplitStrategy().split(100, participants)
