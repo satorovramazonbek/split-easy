@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from app.domain.exceptions import InvalidSplitError
 from app.domain.models import ExpenseShare
-from app.domain.money import split_evenly, validate_amount
+from app.domain.money import allocate_proportionally, split_evenly, validate_amount
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,18 @@ class SplitStrategy(ABC):
         """Return the amount for each participant, in the same order."""
 
 
+def _positive_number(value: object, label: str) -> int | Decimal:
+    """Return ``value`` if it is a positive ``int`` or ``Decimal``.
+
+    ``float`` is rejected on purpose: money calculations must stay exact.
+    """
+    if isinstance(value, bool) or not isinstance(value, int | Decimal):
+        raise InvalidSplitError(f"{label} must be an integer or Decimal")
+    if value <= 0:
+        raise InvalidSplitError(f"{label} must be positive")
+    return value
+
+
 class EqualSplitStrategy(SplitStrategy):
     """Split the total equally between all participants."""
 
@@ -89,3 +101,20 @@ class ExactSplitStrategy(SplitStrategy):
                 f"Exact amounts sum ({sum(values)}) must equal total ({total})"
             )
         return values
+
+
+class PercentageSplitStrategy(SplitStrategy):
+    """Split by percentages; percentages must add up to exactly 100."""
+
+    def _calculate(
+        self, total: int, participants: Sequence[Participant]
+    ) -> list[int]:
+        percentages = [
+            _positive_number(participant.value, "Percentage")
+            for participant in participants
+        ]
+        if sum(percentages) != 100:
+            raise InvalidSplitError(
+                f"Percentages must add up to 100, got {sum(percentages)}"
+            )
+        return allocate_proportionally(total, percentages)
