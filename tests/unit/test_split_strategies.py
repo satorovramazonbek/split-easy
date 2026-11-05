@@ -5,7 +5,11 @@ from decimal import Decimal
 import pytest
 
 from app.domain.exceptions import InvalidAmountError, InvalidSplitError
-from app.domain.split_strategies import EqualSplitStrategy, Participant
+from app.domain.split_strategies import (
+    EqualSplitStrategy,
+    ExactSplitStrategy,
+    Participant,
+)
 
 
 def amounts(shares: list) -> dict[int, int]:
@@ -56,3 +60,43 @@ def test_participant_value_can_be_decimal() -> None:
     participant = Participant(user_id=1, value=Decimal("12.5"))
 
     assert participant.value == Decimal("12.5")
+
+
+# --- Exact ---------------------------------------------------------------
+
+
+def test_exact_split_uses_given_amounts() -> None:
+    participants = [Participant(1, 50), Participant(2, 40), Participant(3, 30)]
+
+    shares = ExactSplitStrategy().split(120, participants)
+
+    assert amounts(shares) == {1: 50, 2: 40, 3: 30}
+
+
+@pytest.mark.parametrize("values", [[50, 40, 20], [50, 40, 40]])
+def test_exact_split_raises_error_when_sum_is_not_total(values: list[int]) -> None:
+    participants = [Participant(i + 1, v) for i, v in enumerate(values)]
+
+    with pytest.raises(InvalidSplitError):
+        ExactSplitStrategy().split(120, participants)
+
+
+def test_exact_split_raises_error_when_amount_is_negative() -> None:
+    participants = [Participant(1, 130), Participant(2, -10)]
+
+    with pytest.raises(InvalidSplitError):
+        ExactSplitStrategy().split(120, participants)
+
+
+@pytest.mark.parametrize("value", [None, 12.5, Decimal("60")])
+def test_exact_split_raises_error_when_value_is_not_integer(value: object) -> None:
+    participants = [Participant(1, 60), Participant(2, value)]  # type: ignore[arg-type]
+
+    with pytest.raises(InvalidSplitError):
+        ExactSplitStrategy().split(120, participants)
+
+
+def test_exact_split_allows_zero_share() -> None:
+    shares = ExactSplitStrategy().split(100, [Participant(1, 100), Participant(2, 0)])
+
+    assert amounts(shares) == {1: 100, 2: 0}
