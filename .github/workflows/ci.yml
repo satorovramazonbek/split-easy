@@ -46,4 +46,6 @@ jobs:
       - name: Run Black
         run: poetry run black --check .
 
-        
+      # 7. Testlar va kod qamrovi (kamida 80%)
+      - name: Run tests
+        run: poetry run pytest --cov=app --cov-fail-under=80
