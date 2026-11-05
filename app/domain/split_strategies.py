@@ -118,3 +118,16 @@ class PercentageSplitStrategy(SplitStrategy):
                 f"Percentages must add up to 100, got {sum(percentages)}"
             )
         return allocate_proportionally(total, percentages)
+
+
+class SharesSplitStrategy(SplitStrategy):
+    """Split proportionally to the number of shares of each participant."""
+
+    def _calculate(
+        self, total: int, participants: Sequence[Participant]
+    ) -> list[int]:
+        shares = [
+            _positive_number(participant.value, "Share")
+            for participant in participants
+        ]
+        return allocate_proportionally(total, shares)
