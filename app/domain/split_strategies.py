@@ -67,3 +67,25 @@ class EqualSplitStrategy(SplitStrategy):
         self, total: int, participants: Sequence[Participant]
     ) -> list[int]:
         return split_evenly(total, len(participants))
+
+
+class ExactSplitStrategy(SplitStrategy):
+    """Each participant pays an exact amount; amounts must add up to total."""
+
+    def _calculate(
+        self, total: int, participants: Sequence[Participant]
+    ) -> list[int]:
+        values: list[int] = []
+        for participant in participants:
+            value = participant.value
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise InvalidSplitError("Exact split requires integer amounts")
+            if value < 0:
+                raise InvalidSplitError("Exact amounts cannot be negative")
+            values.append(value)
+
+        if sum(values) != total:
+            raise InvalidSplitError(
+                f"Exact amounts sum ({sum(values)}) must equal total ({total})"
+            )
+        return values
