@@ -1,0 +1,49 @@
+
+name: SplitEasy CI
+
+# CI qachon ishga tushadi?
+on:
+  push:
+    branches:
+      - main
+      - "chore/**"
+      - "feature/**"
+      - "fix/**"
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  quality-check:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Repository kodini yuklab olish
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Python muhitini tayyorlash
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 3. Poetry o'rnatish
+      - name: Install Poetry
+        run: pip install poetry
+
+      # 4. Kutubxonalarni o'rnatish
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      # 5. Ruff orqali kodni tekshirish
+      - name: Run Ruff
+        run: poetry run ruff check .
+
+      # 6. Black orqali formatni tekshirish
+      - name: Run Black
+        run: poetry run black --check .
+
+        
