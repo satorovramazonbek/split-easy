@@ -54,9 +54,7 @@ class SplitStrategy(ABC):
             raise InvalidSplitError("Each participant can appear only once")
 
     @abstractmethod
-    def _calculate(
-        self, total: int, participants: Sequence[Participant]
-    ) -> list[int]:
+    def _calculate(self, total: int, participants: Sequence[Participant]) -> list[int]:
         """Return the amount for each participant, in the same order."""
 
 
@@ -75,18 +73,14 @@ def _positive_number(value: object, label: str) -> int | Decimal:
 class EqualSplitStrategy(SplitStrategy):
     """Split the total equally between all participants."""
 
-    def _calculate(
-        self, total: int, participants: Sequence[Participant]
-    ) -> list[int]:
+    def _calculate(self, total: int, participants: Sequence[Participant]) -> list[int]:
         return split_evenly(total, len(participants))
 
 
 class ExactSplitStrategy(SplitStrategy):
     """Each participant pays an exact amount; amounts must add up to total."""
 
-    def _calculate(
-        self, total: int, participants: Sequence[Participant]
-    ) -> list[int]:
+    def _calculate(self, total: int, participants: Sequence[Participant]) -> list[int]:
         values: list[int] = []
         for participant in participants:
             value = participant.value
@@ -106,9 +100,7 @@ class ExactSplitStrategy(SplitStrategy):
 class PercentageSplitStrategy(SplitStrategy):
     """Split by percentages; percentages must add up to exactly 100."""
 
-    def _calculate(
-        self, total: int, participants: Sequence[Participant]
-    ) -> list[int]:
+    def _calculate(self, total: int, participants: Sequence[Participant]) -> list[int]:
         percentages = [
             _positive_number(participant.value, "Percentage")
             for participant in participants
@@ -123,11 +115,8 @@ class PercentageSplitStrategy(SplitStrategy):
 class SharesSplitStrategy(SplitStrategy):
     """Split proportionally to the number of shares of each participant."""
 
-    def _calculate(
-        self, total: int, participants: Sequence[Participant]
-    ) -> list[int]:
+    def _calculate(self, total: int, participants: Sequence[Participant]) -> list[int]:
         shares = [
-            _positive_number(participant.value, "Share")
-            for participant in participants
+            _positive_number(participant.value, "Share") for participant in participants
         ]
         return allocate_proportionally(total, shares)

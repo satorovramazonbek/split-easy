@@ -39,7 +39,7 @@ def test_split_evenly_raises_error_when_parts_is_not_positive() -> None:
         (300, [1, 1, 1], [100, 100, 100]),
         (100, [1, 1, 1], [34, 33, 33]),
         (120, [2, 1, 1], [60, 30, 30]),
-        (100, [Decimal("50"), Decimal("30"), Decimal("20")], [50, 30, 20]),
+        (100, [Decimal(50), Decimal(30), Decimal(20)], [50, 30, 20]),
         (100, [Decimal("33.33"), Decimal("33.33"), Decimal("33.34")], [34, 33, 33]),
     ],
 )
@@ -65,7 +65,7 @@ def test_validate_amount_rejects_non_positive_values(amount: int) -> None:
         validate_amount(amount)
 
 
-@pytest.mark.parametrize("amount", [1.5, "100", True, Decimal("10")])
+@pytest.mark.parametrize("amount", [1.5, "100", True, Decimal(10)])
 def test_validate_amount_rejects_non_integer_types(amount: object) -> None:
     with pytest.raises(InvalidAmountError):
         validate_amount(amount)

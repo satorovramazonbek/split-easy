@@ -28,7 +28,9 @@ def make_expense(
 
 def test_two_person_expense_gives_correct_balances() -> None:
     # Arrange: user 1 pays 100 for both
-    expense = make_expense(100, paid_by=1, participants=[Participant(1), Participant(2)])
+    expense = make_expense(
+        100, paid_by=1, participants=[Participant(1), Participant(2)]
+    )
 
     # Act
     balances = calculate_balances([expense])
@@ -52,8 +54,12 @@ def test_trip_example_from_specification() -> None:
 
 
 def test_settlement_changes_balances() -> None:
-    expense = make_expense(100, paid_by=1, participants=[Participant(1), Participant(2)])
-    settlement = Settlement(id=None, group_id=1, from_user_id=2, to_user_id=1, amount=50)
+    expense = make_expense(
+        100, paid_by=1, participants=[Participant(1), Participant(2)]
+    )
+    settlement = Settlement(
+        id=None, group_id=1, from_user_id=2, to_user_id=1, amount=50
+    )
 
     balances = calculate_balances([expense], [settlement])
 
@@ -61,8 +67,12 @@ def test_settlement_changes_balances() -> None:
 
 
 def test_partial_settlement_reduces_debt() -> None:
-    expense = make_expense(100, paid_by=1, participants=[Participant(1), Participant(2)])
-    settlement = Settlement(id=None, group_id=1, from_user_id=2, to_user_id=1, amount=20)
+    expense = make_expense(
+        100, paid_by=1, participants=[Participant(1), Participant(2)]
+    )
+    settlement = Settlement(
+        id=None, group_id=1, from_user_id=2, to_user_id=1, amount=20
+    )
 
     balances = calculate_balances([expense], [settlement])
 
@@ -70,7 +80,9 @@ def test_partial_settlement_reduces_debt() -> None:
 
 
 def test_members_without_activity_have_zero_balance() -> None:
-    expense = make_expense(100, paid_by=1, participants=[Participant(1), Participant(2)])
+    expense = make_expense(
+        100, paid_by=1, participants=[Participant(1), Participant(2)]
+    )
 
     balances = calculate_balances([expense], member_ids=[1, 2, 3])
 

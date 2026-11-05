@@ -90,7 +90,7 @@ def test_exact_split_raises_error_when_amount_is_negative() -> None:
         ExactSplitStrategy().split(120, participants)
 
 
-@pytest.mark.parametrize("value", [None, 12.5, Decimal("60")])
+@pytest.mark.parametrize("value", [None, 12.5, Decimal(60)])
 def test_exact_split_raises_error_when_value_is_not_integer(value: object) -> None:
     participants = [Participant(1, 60), Participant(2, value)]  # type: ignore[arg-type]
 
