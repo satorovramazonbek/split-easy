@@ -20,6 +20,8 @@ class Settings:
     database_url: str
     secret_key: str
     access_token_minutes: int
+    # Send the login cookie only over HTTPS. Off by default for local http.
+    cookie_secure: bool = False
 
 
 def load_settings() -> Settings:
@@ -37,6 +39,8 @@ def load_settings() -> Settings:
         access_token_minutes=int(
             os.environ.get("SPLITEASY_ACCESS_TOKEN_MINUTES", DEFAULT_TOKEN_MINUTES)
         ),
+        cookie_secure=os.environ.get("SPLITEASY_COOKIE_SECURE", "0").lower()
+        in {"1", "true", "yes"},
     )
 
 

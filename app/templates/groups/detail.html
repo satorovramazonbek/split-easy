@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}{{ group.name }}{% endblock %}
+{% block nav_groups %}active{% endblock %}
+{% block content %}
+{% set cur = group.currency %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/groups">Guruhlarim</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ group.name }}</li>
+  </ol>
+</nav>
+
+<section class="card-se d-flex flex-wrap justify-content-between align-items-center gap-2">
+  <div>
+    <h1 class="card-title mb-1">{{ group.name }}</h1>
+    <div class="text-muted small">{{ cur }} · {{ members | length }} a'zo · {{ group.created_at | human_date }} da yaratilgan</div>
+  </div>
+  {% if is_owner %}
+  <form method="post" action="/groups/{{ group.id }}/delete"
+        onsubmit="return confirm('Guruh o\'chirilsinmi? Xarajatlar tarixi saqlanib qoladi.');">
+    <button type="submit" class="btn btn-outline-danger btn-sm">Guruhni o'chirish</button>
+  </form>
+  {% endif %}
+</section>
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <section class="card-se h-100">
+      <h2 class="card-title">👥 A'zolar</h2>
+      <ul class="list-unstyled member-list mb-3">
+        {% for m in members %}
+        <li class="d-flex justify-content-between align-items-center">
+          <span>
+            {{ m.username }}
+            {% if m.is_owner %}<span class="badge text-bg-success ms-1">egasi</span>{% endif %}
+            {% if m.user_id == user.id %}<span class="badge text-bg-light ms-1">siz</span>{% endif %}
+          </span>
+          {% if is_owner and not m.is_owner %}
+          <form method="post" action="/groups/{{ group.id }}/members/{{ m.user_id }}/remove"
+                onsubmit="return confirm('{{ m.username }} guruhdan chiqarilsinmi?');">
+            <button type="submit" class="btn btn-link btn-sm text-danger p-0">chiqarish</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% if is_owner %}
+      <form method="post" action="/groups/{{ group.id }}/members" class="d-flex gap-2">
+        <input type="text" class="form-control" name="login" placeholder="Foydalanuvchi nomi yoki email"
+               aria-label="Yangi a'zo" required>
+        <button type="submit" class="btn btn-primary text-nowrap">Qo'shish</button>
+      </form>
+      {% else %}
+      <p class="text-muted small mb-0">A'zolarni faqat guruh egasi qo'sha oladi.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="col-lg-7">
+    <section class="card-se h-100">
+      <h2 class="card-title">⚖️ Balanslar</h2>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-2">
+          <thead>
+            <tr><th>A'zo</th><th class="text-end">To'lagan</th><th class="text-end">Ulushi</th><th class="text-end">Balans</th></tr>
+          </thead>
+          <tbody>
+            {% for b in balances %}
+            <tr>
+              <td>{{ b.username }}</td>
+              <td class="text-end">{{ b.paid | money(cur) }}</td>
+              <td class="text-end">{{ b.owed | money(cur) }}</td>
+              <td class="text-end {{ 'pos' if b.balance > 0 else 'neg' if b.balance < 0 }}">{{ b.balance | money(cur) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted small mb-0">Musbat — guruh unga qarz, manfiy — u guruhga qarzdor.</p>
+    </section>
+  </div>
+</div>
+
+<section class="card-se mt-3">
+  <h2 class="card-title">📈 Hisobotlar</h2>
+  {% if not running %}
+  <p class="text-muted mb-0">Bu guruhda hali xarajat yo'q — hisobotlar xarajatlar kiritilgach paydo bo'ladi.</p>
+  {% else %}
+  <ul class="nav nav-tabs flex-nowrap overflow-auto" role="tablist">
+    {% set tabs = [("categories", "Kategoriyalar"), ("monthly", "Oylar"), ("top", "Eng ko'p to'laganlar"),
+                   ("above", "O'rtachadan katta"), ("running", "O'sib boruvchi"), ("inactive", "Qatnashmaganlar")] %}
+    {% for id, label in tabs %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link text-nowrap {{ 'active' if loop.first }}" data-bs-toggle="tab"
+              data-bs-target="#tab-{{ id }}" type="button" role="tab">{{ label }}</button>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="tab-content pt-3">
+    <div class="tab-pane fade show active" id="tab-categories" role="tabpanel">
+      {% for c in categories %}
+      <div class="bar-row">
+        <div class="bar-label">{{ c.category | category }} <span class="text-muted small">({{ c.expense_count }})</span></div>
+        <div class="bar"><div class="bar-fill" style="width: {{ (c.total / category_max * 100) | round(1) }}%"></div></div>
+        <div class="bar-value">{{ c.total | money(cur) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="tab-pane fade" id="tab-monthly" role="tabpanel">
+      {% for m in monthly %}
+      <div class="bar-row">
+        <div class="bar-label">{{ m.month | month }} <span class="text-muted small">({{ m.expense_count }})</span></div>
+        <div class="bar"><div class="bar-fill bar-fill-alt" style="width: {{ (m.total / monthly_max * 100) | round(1) }}%"></div></div>
+        <div class="bar-value">{{ m.total | money(cur) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="tab-pane fade" id="tab-top" role="tabpanel">
+      <ol class="mb-0">
+        {% for p in top_payers %}
+        <li><strong>{{ p.username }}</strong> — {{ p.total_paid | money(cur) }}
+          <span class="text-muted small">({{ p.expense_count }} ta xarajat)</span></li>
+        {% endfor %}
+      </ol>
+    </div>
+
+    <div class="tab-pane fade" id="tab-above" role="tabpanel">
+      {% if above_average %}
+      <p class="text-muted small">O'rtacha xarajat: {{ above_average[0].group_average | money(cur) }}</p>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Sana</th><th>Tavsif</th><th class="text-end">Summa</th></tr></thead>
+          <tbody>
+            {% for e in above_average %}
+            <tr><td>{{ e.expense_date | human_date }}</td><td>{{ e.description }}</td><td class="text-end">{{ e.amount | money(cur) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">O'rtachadan katta xarajat yo'q.</p>
+      {% endif %}
+    </div>
+
+    <div class="tab-pane fade" id="tab-running" role="tabpanel">
+      <div class="table-responsive scroll-table">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Sana</th><th class="text-end">Xarajat</th><th class="text-end">Jami shu kungacha</th></tr></thead>
+          <tbody>
+            {% for r in running %}
+            <tr><td>{{ r.expense_date | human_date }}</td><td class="text-end">{{ r.amount | money(cur) }}</td><td class="text-end fw-semibold">{{ r.running_total | money(cur) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-inactive" role="tabpanel">
+      {% if inactive %}
+      <ul class="mb-0">
+        {% for m in inactive %}<li>{{ m.username }} <span class="text-muted small">— {{ m.joined_at | human_date }} da qo'shilgan</span></li>{% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-muted mb-0">Hamma a'zolar kamida bitta xarajatda qatnashgan.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

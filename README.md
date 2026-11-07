@@ -142,7 +142,9 @@ Sxema tavsifi: [`docs/DB.md`](docs/DB.md).
 poetry run uvicorn app.main:app --reload
 ```
 
-- Ilova: http://127.0.0.1:8000
+- Tezkor hisob (ro'yxatdan o'tmasdan): http://127.0.0.1:8000
+- Ro'yxatdan o'tish / kirish: http://127.0.0.1:8000/register, http://127.0.0.1:8000/login
+- Guruhlarim va hisobotlar: http://127.0.0.1:8000/groups
 - API hujjatlari (Swagger): http://127.0.0.1:8000/docs
 
 ### 6. Testlar

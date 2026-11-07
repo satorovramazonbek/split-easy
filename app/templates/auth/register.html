@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Ro'yxatdan o'tish{% endblock %}
+{% block content %}
+<div class="auth-card card-se">
+  <h1 class="card-title text-center">Ro'yxatdan o'tish</h1>
+  {% if errors.form %}<div class="alert alert-danger py-2">{{ errors.form }}</div>{% endif %}
+  <form method="post" action="/register" novalidate>
+    <div class="mb-3">
+      <label for="username" class="form-label">Foydalanuvchi nomi</label>
+      <input type="text" class="form-control {{ 'is-invalid' if errors.username }}" id="username"
+             name="username" value="{{ values.username or '' }}" autocomplete="username"
+             minlength="3" maxlength="32" pattern="[A-Za-z0-9_.]+" required autofocus>
+      <div class="invalid-feedback">{{ errors.username }}</div>
+      <div class="form-text">Lotin harflari, raqamlar, _ yoki . — boshqalar sizni shu nom bilan qo'shadi.</div>
+    </div>
+    <div class="mb-3">
+      <label for="email" class="form-label">Email</label>
+      <input type="email" class="form-control {{ 'is-invalid' if errors.email }}" id="email"
+             name="email" value="{{ values.email or '' }}" autocomplete="email" required>
+      <div class="invalid-feedback">{{ errors.email }}</div>
+    </div>
+    <div class="mb-3">
+      <label for="password" class="form-label">Parol</label>
+      <input type="password" class="form-control {{ 'is-invalid' if errors.password }}" id="password"
+             name="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+      <div class="invalid-feedback">{{ errors.password }}</div>
+      <div class="form-text">Kamida 8 belgi.</div>
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Ro'yxatdan o'tish</button>
+  </form>
+  <p class="text-center text-muted small mt-3 mb-0">
+    Hisobingiz bormi? <a href="/login">Kiring</a>
+  </p>
+</div>
+{% endblock %}

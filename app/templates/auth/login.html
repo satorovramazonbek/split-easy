@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Kirish{% endblock %}
+{% block content %}
+<div class="auth-card card-se">
+  <h1 class="card-title text-center">Kirish</h1>
+  {% if error %}<div class="alert alert-danger py-2">{{ error }}</div>{% endif %}
+  <form method="post" action="/login" novalidate>
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="mb-3">
+      <label for="username" class="form-label">Foydalanuvchi nomi yoki email</label>
+      <input type="text" class="form-control" id="username" name="username"
+             value="{{ username or '' }}" autocomplete="username" required autofocus>
+    </div>
+    <div class="mb-3">
+      <label for="password" class="form-label">Parol</label>
+      <input type="password" class="form-control" id="password" name="password"
+             autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Kirish</button>
+  </form>
+  <p class="text-center text-muted small mt-3 mb-0">
+    Hisobingiz yo'qmi? <a href="/register">Ro'yxatdan o'ting</a>
+  </p>
+</div>
+{% endblock %}
