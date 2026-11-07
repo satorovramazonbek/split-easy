@@ -1,4 +1,3 @@
-from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -10,27 +9,9 @@ from app.services.auth_service import (
     InvalidCredentialsError,
     UserAlreadyExistsError,
 )
+from tests.unit.fakes import InMemoryUserRepository
 
 NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
-
-
-class InMemoryUserRepository:
-    def __init__(self) -> None:
-        self.users: dict[int, User] = {}
-
-    def add(self, user: User) -> User:
-        stored = replace(user, id=len(self.users) + 1)
-        self.users[stored.id] = stored
-        return stored
-
-    def get_by_id(self, user_id: int) -> User | None:
-        return self.users.get(user_id)
-
-    def get_by_username(self, username: str) -> User | None:
-        return next((u for u in self.users.values() if u.username == username), None)
-
-    def get_by_email(self, email: str) -> User | None:
-        return next((u for u in self.users.values() if u.email == email), None)
 
 
 class FakeHasher:
