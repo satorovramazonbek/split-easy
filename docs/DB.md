@@ -153,35 +153,99 @@ faqat ulushda qatnashgan a'zoni chiqarishni taqiqlash ham servisda (`GroupServic
 
 ## 4. Xom SQL hisobot so'rovlari
 
-> ⏳ Keyingi bosqich: `ReportRepository` interfeysi va `report_queries.py` (TZ 10.2).
+Hisobotlar ORM orqali emas, xom SQLda yozilgan:
+[`report_queries.py`](../app/repositories/sqlalchemy/report_queries.py). Ular
+`ReportRepository` interfeysi (`app/repositories/interfaces/report_repository.py`) ortida;
+`ReportService` faqat interfeysni biladi (ISP, DIP). Har bir so'rov ustida izoh bor: nimani
+qaytaradi va qaysi jadvallarni bog'laydi. Barcha qiymatlar parametr (`:group_id`) — satr
+qo'shib so'rov yasalmaydi (SQL injection testi: `test_parameters_are_bound_not_concatenated`).
+
+| # | Hisobot | SQL vositasi | API | TZ |
+|---|---|---|---|---|
+| 1 | A'zolarning sof balansi | `JOIN`, `SUM`, `GROUP BY`, `COALESCE`, `LEFT JOIN` subquery'lar | `GET /api/groups/{id}/reports/balances` | FR-16 |
+| 2 | Kategoriya bo'yicha jami | `GROUP BY`, `ORDER BY` | `.../reports/categories` | FR-26 |
+| 3 | Oylik dinamika | `strftime('%Y-%m', ...)`, `GROUP BY` | `.../reports/monthly` | FR-26 |
+| 4 | Eng ko'p to'lagan 3 a'zo | `JOIN`, `ORDER BY`, `LIMIT` | `.../reports/top-payers?limit=3` | — |
+| 5 | Hali qatnashmagan a'zolar | `NOT EXISTS` (ikki marta) | `.../reports/inactive-members` | — |
+| 6 | O'rtachadan katta xarajatlar | skalyar subquery `(SELECT AVG(...))` | `.../reports/above-average` | — |
+| 7 | O'sib boruvchi yig'indi | window: `SUM() OVER (ORDER BY expense_date, id)` | `.../reports/running-total` | — |
+| 8 | Foydalanuvchining barcha guruhlar bo'yicha holati | `WITH` (CTE), `UNION ALL` | `GET /api/reports/overview` | FR-19 |
+
+**Kesishgan tekshiruv:** 1-so'rov natijasi Python'dagi `calculate_balances` (domen) bilan
+aynan bir xil — `tests/integration/test_reports.py::test_1_sql_balances_equal_domain_calculation`.
+8-so'rov ham har bir guruhda 1-so'rov bilan bir xil balans berishi tekshiriladi.
+Guruh hisobotlarini faqat a'zolar ko'radi (a'zo emas → 403, guruh yo'q → 404).
+
+8-so'rovdagi "jami sizdan qarz / jami sizga qarz" **valyuta bo'yicha alohida** hisoblanadi:
+UZS va USD guruhlaridagi summalarni qo'shib bo'lmaydi.
 
 ---
 
 ## 5. Indekslar
 
-PRIMARY KEY va UNIQUE o'z indeksini o'zi yaratadi (`sqlite_autoindex_*`), ular takrorlanmaydi.
-Qo'shimcha indekslar alohida migratsiyada (`0004_add_query_indexes`) — benchmark uchun
-`alembic downgrade 0003` / `upgrade head` bilan ularni o'chirib-yoqish mumkin.
+PRIMARY KEY va UNIQUE o'z indeksini o'zi yaratadi (`sqlite_autoindex_*`), ular takrorlanmaydi
+(masalan, `users.email` — login so'rovi uchun alohida indeks kerak emas).
+Qo'shimcha indekslar alohida migratsiyalarda (`0004`, `0005`) — benchmark ularni
+`alembic downgrade 0003` / `upgrade head` bilan o'chirib-yoqadi.
 
 | Indeks | So'rov | Ustunlar tartibi nega shunday |
 |---|---|---|
 | `ix_group_members_user_id` | "Mening guruhlarim" (`WHERE user_id = ?`) | PK `(group_id, user_id)` faqat `group_id` bo'yicha qidirishga yaraydi |
-| `ix_expenses_group_id_expense_date_id` (**composite**) | Guruh xarajatlari, sana bo'yicha, sahifalab | `group_id` — tenglik filtri birinchi; keyin `expense_date, id` — tartiblash indeksdan olinadi, `id` keyset pagination uchun bir xil sanalarni ajratadi |
-| `ix_expenses_group_id_paid_by` (composite) | Guruhda kim qancha to'lagan (`GROUP BY paid_by`); a'zoni o'chirishdagi kompozit FK tekshiruvi | FK ustunlari tartibida |
-| `ix_expense_shares_user_id` | Foydalanuvchining ulushlari (balans) | PK `(expense_id, user_id)` `user_id` bo'yicha yordam bermaydi |
-| `ix_settlements_group_id_created_at` | Guruh to'lovlari tarixi | Filtr, keyin tartib |
+| `ix_expenses_group_id_expense_date_id` (**composite**) | Guruh xarajatlari, sana bo'yicha, sahifalab (FR-13); kategoriya filtri (FR-14) | `group_id` — tenglik filtri birinchi; keyin `expense_date, id` — tartiblash indeksdan olinadi (`USE TEMP B-TREE` yo'q), `id` bir xil sanalarni ajratadi |
+| `ix_expenses_group_id_paid_by_amount` (**composite, covering**) | 1-, 4-, 8-so'rovlar: guruhda kim qancha to'lagan; a'zoni o'chirishdagi kompozit FK tekshiruvi | `group_id, paid_by` — filtr va `GROUP BY`; `amount` jadvalga murojaat qilmaslik uchun (`0005`, pastga qarang) |
+| `ix_expense_shares_user_id` | Foydalanuvchining ulushlari (8-so'rov, FR-19) | PK `(expense_id, user_id)` `user_id` bo'yicha yordam bermaydi |
+| `ix_settlements_group_id_created_at` | 1-so'rov, guruh to'lovlari tarixi | Filtr, keyin tartib |
 | `ix_notifications_user_id_created_at` | "Mening bildirishnomalarim", yangilari birinchi | Filtr, keyin tartib |
 
-**Indekslanmagan ustunlar (ongli qaror):**
+### O'lchov natijalari
+
+`scripts/seed.py` (1 000 foydalanuvchi, 200 guruh, 100 000 xarajat, 300 221 ulush, 10 000
+to'lov, 50 000 bildirishnoma; `random.seed(42)`) va `scripts/benchmark.py` (1 ta qizdirish +
+7 ta o'lchov, o'rtacha). To'liq natija va har bir so'rovning `EXPLAIN QUERY PLAN` i:
+[`docs/benchmark.md`](benchmark.md).
+
+| So'rov | Indekssiz (ms) | Indeks bilan (ms) | Reja (oldin → keyin) |
+|---|---:|---:|---|
+| Guruh xarajatlari, 1-sahifa (FR-13) | 15.6 | 0.11 | `SCAN` → `SEARCH ... ix_expenses_group_id_expense_date_id` |
+| Kategoriya bo'yicha filtr (FR-14) | 21.8 | 0.15 | `SCAN` → `SEARCH ... ix_expenses_group_id_expense_date_id` |
+| A'zolar balansi (1-so'rov) | 39.9 | 9.3 | `SCAN` → `SEARCH ... COVERING INDEX ix_expenses_group_id_paid_by_amount` |
+| Foydalanuvchi umumiy holati (8-so'rov) | 64.2 | 14.4 | `SCAN` → `SEARCH ... COVERING INDEX` |
+| O'qilmagan bildirishnomalar | 7.3 | 0.10 | `SCAN` → `SEARCH ... ix_notifications_user_id_created_at` |
+| Eng ko'p to'laganlar (4-so'rov) | 25.1 | 0.70 | `SCAN` → `SEARCH ... COVERING INDEX` |
+
+Hammasi NFR-5 talabidan (100 000 xarajatda asosiy ro'yxatlar < 100 ms) ancha past.
+Raqamlar mashinaga bog'liq va har yurgizishda biroz farq qiladi; reja (`SCAN` → `SEARCH`)
+o'zgarmaydi.
+
+### O'lchov asosida qabul qilingan va rad etilgan qarorlar
+
+| Variant | Natija (ms) | Qaror |
+|---|---|---|
+| `expenses(group_id, paid_by)` ga `amount` qo'shish (covering) | 4-so'rov 3.9 → 0.5, 1-so'rov ~1 ms tezroq | ✅ **Qabul** (`0005`): eski indeks almashtiriladi, yangi indeks qo'shilmaydi |
+| `expense_shares(expense_id, user_id, share_amount)` (covering) | 1-so'rov ~2 ms tezroq | ❌ 300 000 qatorli jadvalning nusxasi, har bir yozuvni sekinlashtiradi — foyda kichik |
+| `expense_shares(user_id, expense_id, share_amount)` | 8-so'rov 13 → 9.5 | ❌ xuddi shu sabab; 8-so'rov allaqachon 15 ms atrofida |
+| `expenses(group_id, category)` (TZ namunasi) | — | ❌ kategoriya filtri busiz ham **0.15 ms**: guruhda ~500 xarajat, sana indeksi bo'yicha yurib birinchi 20 ta mosini tez topadi |
+| `notifications(user_id, is_read)` (TZ namunasi) | — | ❌ mavjud `(user_id, created_at)` bilan **0.10 ms**; `is_read` ikki qiymatli |
+
+**Indekslanmagan ustunlar:**
 
 - `groups.is_deleted` — faqat ikki qiymat, deyarli hammasi `0`; indeks selektiv emas, yozishni
   sekinlashtiradi xolos.
 - `groups.owner_id` — foydalanuvchi o'chirish ilovada yo'q, "egasi bo'yicha guruhlar" so'rovi
   ham yo'q; FK tekshiruvi kamdan-kam ishlaydi.
 
-> ⏳ Keyingi bosqich: `scripts/seed.py`, `EXPLAIN QUERY PLAN` natijalari va
-> `scripts/benchmark.py` bilan "indekssiz / indeks bilan" o'lchov jadvali (TZ 10.3).
-> O'lchov natijasiga ko'ra indekslar ro'yxati o'zgarishi mumkin.
+### Bonus: OFFSET va keyset pagination
+
+Butun `expenses` jadvalidagi 90 000-qatordan keyingi sahifa:
+
+| Usul | ms | Reja |
+|---|---:|---|
+| `ORDER BY id DESC LIMIT 20 OFFSET 90000` | ~10.4 | `SCAN expenses` — 90 000 qatorni o'qib tashlab yuboradi |
+| `WHERE id < :after_id ORDER BY id DESC LIMIT 20` (keyset) | ~0.07 | `SEARCH ... INTEGER PRIMARY KEY` — darhol kerakli joyga |
+
+OFFSET narxi sahifa raqami bilan chiziqli o'sadi, keyset esa o'zgarmaydi (~150× farq). Shuning
+uchun `ix_expenses_group_id_expense_date_id` oxirida `id` bor: guruh xarajatlari ro'yxatini
+`(expense_date, id) < (:last_date, :last_id)` sharti bilan keyset usulida sahifalash mumkin.
 
 ---
 
@@ -222,6 +286,7 @@ guruh qolmaydi. Kutilgan xatolar (takroriy a'zo, tarixi bor a'zoni chiqarish) **
 | `0002` | `groups`, `group_members` |
 | `0003` | `expenses`, `expense_shares`, `settlements`, `notifications` |
 | `0004` | so'rov indekslari |
+| `0005` | `(group_id, paid_by)` indeksini `amount` bilan covering qilish (o'lchov asosida) |
 
 Har birida `upgrade` va `downgrade` bor. `alembic check` ORM bilan farq yo'qligini
 ko'rsatadi; `test_schema.py` esa `upgrade head`, `downgrade base` va indeks

@@ -96,7 +96,8 @@ class ExpenseORM(Base):
         # Group expense list, newest first, paginated.
         Index("ix_expenses_group_id_expense_date_id", "group_id", "expense_date", "id"),
         # "Who paid how much" per group; also serves the composite FK check.
-        Index("ix_expenses_group_id_paid_by", "group_id", "paid_by"),
+        # amount makes it covering: the table is not read (migration 0005).
+        Index("ix_expenses_group_id_paid_by_amount", "group_id", "paid_by", "amount"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

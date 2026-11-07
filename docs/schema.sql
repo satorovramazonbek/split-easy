@@ -125,11 +125,11 @@ CREATE TABLE notifications (
         REFERENCES users (id) ON DELETE CASCADE
 );
 
--- Indekslar (migrations/versions/0004; asoslanishi docs/DB.md da) ------------
+-- Indekslar (migrations/versions/0004, 0005; asoslanishi docs/DB.md da) ------
 -- UNIQUE va PRIMARY KEY o'z indeksini o'zi yaratadi, ular bu yerda takrorlanmaydi.
 CREATE INDEX ix_group_members_user_id ON group_members (user_id);
 CREATE INDEX ix_expenses_group_id_expense_date_id ON expenses (group_id, expense_date, id);
-CREATE INDEX ix_expenses_group_id_paid_by ON expenses (group_id, paid_by);
+CREATE INDEX ix_expenses_group_id_paid_by_amount ON expenses (group_id, paid_by, amount);
 CREATE INDEX ix_expense_shares_user_id ON expense_shares (user_id);
 CREATE INDEX ix_settlements_group_id_created_at ON settlements (group_id, created_at);
 CREATE INDEX ix_notifications_user_id_created_at ON notifications (user_id, created_at);

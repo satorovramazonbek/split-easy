@@ -154,6 +154,16 @@ poetry run ruff check .            # kod sifati
 poetry run black --check .         # formatlash
 ```
 
+### 7. Katta ma'lumot va benchmark (ixtiyoriy)
+
+```bash
+poetry run python scripts/seed.py          # spliteasy-seed.db: 100 000 xarajat, ~10 s
+poetry run python scripts/benchmark.py     # indekssiz / indeks bilan -> docs/benchmark.md
+```
+
+Seed deterministik (`--seed 42`), barcha foydalanuvchilar paroli `secret123`. Natijalar
+tahlili: [`docs/DB.md`](docs/DB.md), 5-bo'lim.
+
 ---
 
 ## Jamoa
@@ -190,3 +200,4 @@ docs: add ERD and normalization analysis
 - [`docs/DB.md`](docs/DB.md) — jadvallar, normalizatsiya, cheklovlar, indekslar, tranzaksiyalar
 - [`docs/erd.png`](docs/erd.png) — ERD (`poetry run python scripts/draw_erd.py` bilan yangilanadi)
 - [`docs/schema.sql`](docs/schema.sql) — qo'lda yozilgan sxema (Alembic natijasi bilan bir xil)
+- [`docs/benchmark.md`](docs/benchmark.md) — indekslar o'lchovi va `EXPLAIN QUERY PLAN`
