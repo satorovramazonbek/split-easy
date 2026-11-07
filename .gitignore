@@ -25,4 +25,5 @@ venv/
 
 # Database
 *.db
+*.db.bak*
 *.sqlite3

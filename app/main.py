@@ -1,7 +1,9 @@
-"""FastAPI application entry point."""
+"""FastAPI application entry point.
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+The database schema is created by Alembic: run ``poetry run alembic upgrade head``
+before starting the server (see README.md).
+"""
+
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -12,18 +14,10 @@ from fastapi.templating import Jinja2Templates
 from app.api.auth import router as auth_router
 from app.api.groups import router as groups_router
 from app.api.quick_split import router as quick_split_router
-from app.infrastructure.database import create_tables
 
 BASE_DIR = Path(__file__).resolve().parent
 
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    create_tables()
-    yield
-
-
-app = FastAPI(title="SplitEasy", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="SplitEasy", version="0.1.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(quick_split_router)
 app.include_router(auth_router)
