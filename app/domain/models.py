@@ -33,11 +33,11 @@ class Category(StrEnum):
 
 @dataclass(frozen=True)
 class User:
-    """A registered user."""
+    """A registered user (DESIGN.md 5.1). Only the password hash is stored."""
 
-    id: int
+    id: int | None
+    username: str
     email: str
-    name: str
     password_hash: str
     created_at: datetime = field(default_factory=datetime.now)
 

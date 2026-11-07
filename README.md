@@ -130,6 +130,12 @@ poetry install
 poetry run alembic upgrade head
 ```
 
+Bo'sh bazadan to'liq sxema (7 ta jadval va indekslar) yaratiladi; standart holatda
+loyiha papkasidagi `spliteasy.db` fayli. Boshqa bazaga `SPLITEASY_DATABASE_URL` orqali
+ulanish mumkin. JWT tokenlari server qayta ishga tushganda ham ishlashi uchun
+`SPLITEASY_SECRET_KEY` ni o'rnating (namuna: [`.env.example`](.env.example)).
+Sxema tavsifi: [`docs/DB.md`](docs/DB.md).
+
 ### 5. Ilovani ishga tushirish
 
 ```bash
@@ -147,6 +153,16 @@ poetry run pytest --cov=app        # kod qamrovi bilan
 poetry run ruff check .            # kod sifati
 poetry run black --check .         # formatlash
 ```
+
+### 7. Katta ma'lumot va benchmark (ixtiyoriy)
+
+```bash
+poetry run python scripts/seed.py          # spliteasy-seed.db: 100 000 xarajat, ~10 s
+poetry run python scripts/benchmark.py     # indekssiz / indeks bilan -> docs/benchmark.md
+```
+
+Seed deterministik (`--seed 42`), barcha foydalanuvchilar paroli `secret123`. Natijalar
+tahlili: [`docs/DB.md`](docs/DB.md), 5-bo'lim.
 
 ---
 
@@ -181,4 +197,7 @@ docs: add ERD and normalization analysis
 
 - [`docs/texnik_topshiriq.pdf.pdf`](docs/texnik_topshiriq.pdf.pdf) — texnik topshiriq
 - [`DESIGN.md`](DESIGN.md) — arxitektura, design patternlar va SOLID printsiplari
-- `docs/DB.md` (tayyorlanmoqda) — ERD, normalizatsiya, indekslar, benchmark, tranzaksiyalar
+- [`docs/DB.md`](docs/DB.md) — jadvallar, normalizatsiya, cheklovlar, indekslar, tranzaksiyalar
+- [`docs/erd.png`](docs/erd.png) — ERD (`poetry run python scripts/draw_erd.py` bilan yangilanadi)
+- [`docs/schema.sql`](docs/schema.sql) — qo'lda yozilgan sxema (Alembic natijasi bilan bir xil)
+- [`docs/benchmark.md`](docs/benchmark.md) — indekslar o'lchovi va `EXPLAIN QUERY PLAN`

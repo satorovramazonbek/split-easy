@@ -4,7 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol
 
-from app.domain.user import User
+from app.domain.models import User
 from app.repositories.interfaces.user_repository import (
     DuplicateUserError,
     UserRepository,

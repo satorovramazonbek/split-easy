@@ -1,17 +1,18 @@
 """SQLAlchemy implementation of ``UserRepository``."""
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.user import User
+from app.domain.models import User
 from app.repositories.interfaces.user_repository import DuplicateUserError
 from app.repositories.sqlalchemy.orm_models import UserORM
 
 
-def _as_utc(value: datetime) -> datetime:
+def as_utc(value: datetime) -> datetime:
     # SQLite does not store the timezone; all timestamps are written in UTC.
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
@@ -22,7 +23,7 @@ def _to_domain(row: UserORM) -> User:
         username=row.username,
         email=row.email,
         password_hash=row.password_hash,
-        created_at=_as_utc(row.created_at),
+        created_at=as_utc(row.created_at),
     )
 
 
@@ -48,6 +49,13 @@ class SqlAlchemyUserRepository:
     def get_by_id(self, user_id: int) -> User | None:
         row = self._session.get(UserORM, user_id)
         return _to_domain(row) if row else None
+
+    def get_many(self, user_ids: Iterable[int]) -> dict[int, User]:
+        ids = set(user_ids)
+        if not ids:
+            return {}
+        rows = self._session.scalars(select(UserORM).where(UserORM.id.in_(ids)))
+        return {row.id: _to_domain(row) for row in rows}
 
     def get_by_username(self, username: str) -> User | None:
         return self._one(select(UserORM).where(UserORM.username == username))

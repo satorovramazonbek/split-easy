@@ -6,12 +6,16 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.domain.user import User
+from app.domain.models import User
 from app.infrastructure.config import settings
 from app.infrastructure.database import get_session
 from app.infrastructure.security import Argon2PasswordHasher, JwtTokenService
+from app.repositories.sqlalchemy.group_repository import SqlAlchemyGroupRepository
+from app.repositories.sqlalchemy.report_repository import SqlAlchemyReportRepository
 from app.repositories.sqlalchemy.user_repository import SqlAlchemyUserRepository
 from app.services.auth_service import AuthService, InvalidCredentialsError
+from app.services.group_service import GroupService
+from app.services.report_service import ReportService
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -44,3 +48,23 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_group_service(session: SessionDep) -> GroupService:
+    # FastAPI caches ``get_session`` per request, so auth and groups share
+    # one session and one transaction.
+    return GroupService(
+        SqlAlchemyGroupRepository(session), SqlAlchemyUserRepository(session)
+    )
+
+
+GroupServiceDep = Annotated[GroupService, Depends(get_group_service)]
+
+
+def get_report_service(session: SessionDep) -> ReportService:
+    return ReportService(
+        SqlAlchemyReportRepository(session), SqlAlchemyGroupRepository(session)
+    )
+
+
+ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
