@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.user import User
+from app.domain.models import User
 from app.repositories.interfaces.user_repository import DuplicateUserError
 from app.repositories.sqlalchemy.orm_models import UserORM
 

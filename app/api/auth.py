@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
 
 from app.api.dependencies import AuthServiceDep, CurrentUser
-from app.domain.user import User
+from app.domain.models import User
 from app.services.auth_service import InvalidCredentialsError, UserAlreadyExistsError
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])

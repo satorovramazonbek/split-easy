@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from app.domain.user import User
+from app.domain.models import User
 
 
 class DuplicateUserError(Exception):

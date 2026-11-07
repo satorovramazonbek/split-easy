@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.domain.user import User
+from app.domain.models import User
 from app.infrastructure.config import settings
 from app.infrastructure.database import get_session
 from app.infrastructure.security import Argon2PasswordHasher, JwtTokenService

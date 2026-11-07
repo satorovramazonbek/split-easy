@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.domain.user import User
+from app.domain.models import User
 from app.repositories.interfaces.user_repository import DuplicateUserError
 from app.services.auth_service import (
     AuthService,
