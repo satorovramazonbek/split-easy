@@ -489,6 +489,13 @@ Ma'lumotlar bazasiga qo‘yiladigan talablar:
 - Ma'lumotlar yaxlitligini saqlash.
 - Noto‘g‘ri xarajat ulushlari kiritilishining oldini olish.
 
+**Nega hisobotlar xom SQL'da?** Hisobotlar ko‘p jadvalni bog‘lab, `GROUP BY`, subquery, window
+function va CTE bilan yig‘ma natija beradi. Bunday so‘rov qo‘lda yozilganda o‘qish,
+`EXPLAIN QUERY PLAN` bilan tekshirish va indeks bilan sozlash ORM yaratgan SQL'dan ancha oson;
+bitta so‘rov ko‘p obyektni xotiraga yuklamasdan natijani bazaning o‘zida hisoblaydi. Shu bilan
+birga so‘rovlar `ReportRepository` interfeysi ortida turadi — servislar SQL'ni bilmaydi.
+Batafsil: `docs/DB.md`, 4-bo‘lim.
+
 ## 13. Xavfsizlik
 
 Tizim xavfsizligini ta'minlash uchun quyidagi talablar bajariladi:

@@ -61,6 +61,16 @@ class MemberHasHistoryError(GroupError):
     """The member has expenses or settlements in the group."""
 
 
+def require_member_group(groups: GroupRepository, user: User, group_id: int) -> Group:
+    """Shared access rule: 404 for a missing or deleted group, 403 for non-members."""
+    group = groups.get_by_id(group_id)
+    if group is None or group.is_deleted:
+        raise GroupNotFoundError("Guruh topilmadi")
+    if not groups.is_member(group_id, user.id):
+        raise GroupPermissionError("Siz bu guruh a'zosi emassiz")
+    return group
+
+
 @dataclass(frozen=True)
 class MemberInfo:
     user_id: int
@@ -160,12 +170,7 @@ class GroupService:
             ) from error
 
     def _member_group(self, user: User, group_id: int) -> Group:
-        group = self._groups.get_by_id(group_id)
-        if group is None or group.is_deleted:
-            raise GroupNotFoundError("Guruh topilmadi")
-        if not self._groups.is_member(group_id, user.id):
-            raise GroupPermissionError("Siz bu guruh a'zosi emassiz")
-        return group
+        return require_member_group(self._groups, user, group_id)
 
     def _owned_group(self, user: User, group_id: int, message: str) -> Group:
         group = self._member_group(user, group_id)

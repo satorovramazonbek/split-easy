@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from app.api.auth import router as auth_router
 from app.api.groups import router as groups_router
 from app.api.quick_split import router as quick_split_router
+from app.api.reports import router as reports_router
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -22,6 +23,7 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(quick_split_router)
 app.include_router(auth_router)
 app.include_router(groups_router)
+app.include_router(reports_router)
 
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
