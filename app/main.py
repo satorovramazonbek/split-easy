@@ -9,12 +9,19 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from app.api.auth import router as auth_router
 from app.api.groups import router as groups_router
 from app.api.quick_split import router as quick_split_router
 from app.api.reports import router as reports_router
+from app.services.group_service import GroupNotFoundError, GroupPermissionError
+from app.web.pages import (
+    LoginRequiredError,
+    group_error_handler,
+    login_required_handler,
+)
+from app.web.pages import router as pages_router
+from app.web.templating import templates
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -24,8 +31,12 @@ app.include_router(quick_split_router)
 app.include_router(auth_router)
 app.include_router(groups_router)
 app.include_router(reports_router)
+app.include_router(pages_router)
 
-templates = Jinja2Templates(directory=BASE_DIR / "templates")
+# HTML pages only: the JSON API catches these errors itself and returns JSON.
+app.add_exception_handler(LoginRequiredError, login_required_handler)
+app.add_exception_handler(GroupNotFoundError, group_error_handler)
+app.add_exception_handler(GroupPermissionError, group_error_handler)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

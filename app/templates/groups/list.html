@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Guruhlarim{% endblock %}
+{% block nav_groups %}active{% endblock %}
+{% block content %}
+{% set positions = {} %}
+{% for g in overview.groups %}{% set _ = positions.update({g.group_id: g.balance}) %}{% endfor %}
+
+<section class="card-se">
+  <h1 class="card-title">📊 Umumiy holat</h1>
+  {% if overview.totals %}
+  <div class="row g-3">
+    {% for t in overview.totals %}
+    <div class="col-sm-6">
+      <div class="stat stat-neg">
+        <div class="stat-label">Jami sizdan qarz ({{ t.currency }})</div>
+        <div class="stat-value">{{ t.you_owe | money(t.currency) }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6">
+      <div class="stat stat-pos">
+        <div class="stat-label">Jami sizga qarz ({{ t.currency }})</div>
+        <div class="stat-value">{{ t.owed_to_you | money(t.currency) }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted mb-0">Siz hali birorta guruhda emassiz. Pastda yangi guruh yarating.</p>
+  {% endif %}
+</section>
+
+<section class="card-se">
+  <h2 class="card-title">👥 Guruhlarim</h2>
+  {% if groups %}
+  <div class="list-group group-list">
+    {% for g in groups %}
+    {% set balance = positions.get(g.id, 0) %}
+    <a href="/groups/{{ g.id }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+      <span>
+        <span class="fw-semibold">{{ g.name }}</span>
+        {% if g.owner_id == user.id %}<span class="badge text-bg-light ms-1">egasi</span>{% endif %}
+        <span class="d-block small text-muted">{{ g.currency }} · {{ g.created_at | human_date }}</span>
+      </span>
+      <span class="{{ 'pos' if balance > 0 else 'neg' if balance < 0 else 'text-muted' }}">
+        {{ balance | money(g.currency) }}
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted mb-0">Hali guruh yo'q.</p>
+  {% endif %}
+</section>
+
+<section class="card-se">
+  <h2 class="card-title">➕ Yangi guruh</h2>
+  {% if error %}<div class="alert alert-danger py-2">{{ error }}</div>{% endif %}
+  <form method="post" action="/groups" class="row g-2 align-items-end">
+    <div class="col-md-7">
+      <label for="name" class="form-label">Nomi</label>
+      <input type="text" class="form-control" id="name" name="name" maxlength="100"
+             value="{{ form.name if form else '' }}" placeholder="Masalan: Samarqand sayohati" required>
+    </div>
+    <div class="col-md-3">
+      <label for="currency" class="form-label">Valyuta</label>
+      <select class="form-select" id="currency" name="currency">
+        {% for c in ["UZS", "USD", "EUR", "RUB"] %}
+        <option value="{{ c }}" {{ 'selected' if form and form.currency == c }}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid">
+      <button type="submit" class="btn btn-primary">Yaratish</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

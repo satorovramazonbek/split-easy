@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ code }}{% endblock %}
+{% block content %}
+<section class="card-se text-center py-5">
+  <div class="error-code">{{ code }}</div>
+  <h1 class="card-title">{{ message }}</h1>
+  <a href="/groups" class="btn btn-primary mt-2">Guruhlarimga qaytish</a>
+</section>
+{% endblock %}
