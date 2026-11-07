@@ -1,5 +1,6 @@
 """Abstraction the services depend on (Dependency Inversion)."""
 
+from collections.abc import Iterable
 from typing import Protocol
 
 from app.domain.models import User
@@ -17,6 +18,9 @@ class UserRepository(Protocol):
         """
 
     def get_by_id(self, user_id: int) -> User | None: ...
+
+    def get_many(self, user_ids: Iterable[int]) -> dict[int, User]:
+        """Users by id in one query; unknown ids are skipped."""
 
     def get_by_username(self, username: str) -> User | None: ...
 
