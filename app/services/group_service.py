@@ -16,6 +16,7 @@ from app.domain.models import Group, GroupMember, User
 from app.repositories.interfaces.group_repository import (
     DuplicateMemberError,
     GroupRepository,
+    MemberHasRecordsError,
 )
 from app.repositories.interfaces.user_repository import UserRepository
 
@@ -54,6 +55,10 @@ class MemberNotFoundError(GroupError):
 
 class OwnerCannotLeaveError(GroupError):
     """The owner must delete the group instead of leaving it."""
+
+
+class MemberHasHistoryError(GroupError):
+    """The member has expenses or settlements in the group."""
 
 
 @dataclass(frozen=True)
@@ -145,8 +150,14 @@ class GroupService:
             )
         if not self._groups.is_member(group.id, member_id):
             raise MemberNotFoundError("Bu foydalanuvchi guruhda emas")
-        # TODO: once expenses exist, refuse while the member's balance is non-zero.
-        self._groups.remove_member(group.id, member_id)
+        # TODO: when the expense service exists, also refuse a member who only
+        # appears in expense shares (the database guards payers and settlements).
+        try:
+            self._groups.remove_member(group.id, member_id)
+        except MemberHasRecordsError as error:
+            raise MemberHasHistoryError(
+                "A'zoning guruhda xarajat yoki to'lovlari bor, uni chiqarib bo'lmaydi"
+            ) from error
 
     def _member_group(self, user: User, group_id: int) -> Group:
         group = self._groups.get_by_id(group_id)

@@ -5,7 +5,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.domain.models import Group, GroupMember
-from app.repositories.interfaces.group_repository import DuplicateMemberError
+from app.repositories.interfaces.group_repository import (
+    DuplicateMemberError,
+    MemberHasRecordsError,
+)
 from app.repositories.sqlalchemy.orm_models import GroupMemberORM, GroupORM
 from app.repositories.sqlalchemy.user_repository import as_utc
 
@@ -76,11 +79,17 @@ class SqlAlchemyGroupRepository:
         return _member(row)
 
     def remove_member(self, group_id: int, user_id: int) -> None:
-        self._session.execute(
-            delete(GroupMemberORM).where(
-                GroupMemberORM.group_id == group_id, GroupMemberORM.user_id == user_id
-            )
-        )
+        try:
+            with self._session.begin_nested():
+                self._session.execute(
+                    delete(GroupMemberORM).where(
+                        GroupMemberORM.group_id == group_id,
+                        GroupMemberORM.user_id == user_id,
+                    )
+                )
+        except IntegrityError as error:
+            # ON DELETE RESTRICT from expenses / settlements (composite FKs).
+            raise MemberHasRecordsError(str(error.orig)) from error
 
     def is_member(self, group_id: int, user_id: int) -> bool:
         return self._session.scalar(

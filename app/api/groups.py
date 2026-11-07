@@ -14,6 +14,7 @@ from app.services.group_service import (
     GroupNotFoundError,
     GroupPermissionError,
     InvalidGroupError,
+    MemberHasHistoryError,
     MemberNotFoundError,
     OwnerCannotLeaveError,
     UserNotFoundError,
@@ -29,6 +30,7 @@ _STATUS_BY_ERROR: dict[type[GroupError], int] = {
     MemberNotFoundError: status.HTTP_404_NOT_FOUND,
     AlreadyMemberError: status.HTTP_409_CONFLICT,
     OwnerCannotLeaveError: status.HTTP_409_CONFLICT,
+    MemberHasHistoryError: status.HTTP_409_CONFLICT,
 }
 
 

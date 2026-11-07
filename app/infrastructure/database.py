@@ -2,15 +2,27 @@
 
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import MetaData, create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.infrastructure.config import settings
 
+# Deterministic constraint names: Alembic migrations, docs/schema.sql and the
+# ORM must produce the same schema, so nothing may be named at random.
+NAMING_CONVENTION = {
+    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_N_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
 
 class Base(DeclarativeBase):
     """Base class for all ORM models."""
+
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 def make_engine(url: str, **kwargs) -> Engine:
@@ -44,11 +56,3 @@ def get_session() -> Iterator[Session]:
         raise
     finally:
         session.close()
-
-
-def create_tables() -> None:
-    """Create missing tables. Will be replaced by Alembic migrations."""
-    # Import ORM models so they are registered on ``Base.metadata``.
-    from app.repositories.sqlalchemy import orm_models  # noqa: F401
-
-    Base.metadata.create_all(engine)

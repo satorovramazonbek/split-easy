@@ -9,6 +9,10 @@ class DuplicateMemberError(Exception):
     """The user is already a member of the group."""
 
 
+class MemberHasRecordsError(Exception):
+    """The member paid an expense or took part in a settlement in this group."""
+
+
 class GroupRepository(Protocol):
     def add(self, group: Group) -> Group:
         """Persist a new group and return it with the assigned id."""
@@ -24,7 +28,8 @@ class GroupRepository(Protocol):
     def add_member(self, member: GroupMember) -> GroupMember:
         """Raises ``DuplicateMemberError`` if the user is already a member."""
 
-    def remove_member(self, group_id: int, user_id: int) -> None: ...
+    def remove_member(self, group_id: int, user_id: int) -> None:
+        """Raises ``MemberHasRecordsError`` if the member has financial history."""
 
     def is_member(self, group_id: int, user_id: int) -> bool: ...
 
