@@ -80,7 +80,8 @@ def test_list_my_groups(db_client: TestClient, aziza, ramazon, group_id) -> None
 
 
 def test_add_member_and_access(db_client: TestClient, aziza, ramazon, group_id):
-    assert db_client.get(f"/api/groups/{group_id}", headers=ramazon).status_code == 404
+    assert db_client.get(f"/api/groups/{group_id}", headers=ramazon).status_code == 403
+    assert db_client.get("/api/groups/999", headers=ramazon).status_code == 404
 
     response = db_client.post(
         f"/api/groups/{group_id}/members", json={"login": "ramazon"}, headers=aziza
@@ -105,43 +106,29 @@ def test_add_member_errors(db_client: TestClient, aziza, ramazon, group_id) -> N
     ).status_code == (409)
 
 
-def test_member_leaves_and_owner_cannot(
-    db_client: TestClient, aziza, ramazon, group_id
-):
-    db_client.post(
-        f"/api/groups/{group_id}/members", json={"login": "ramazon"}, headers=aziza
-    )
-    me = db_client.get("/api/auth/me", headers=ramazon).json()["id"]
-    owner = db_client.get("/api/auth/me", headers=aziza).json()["id"]
+def test_owner_removes_member(db_client: TestClient, aziza, ramazon, group_id):
+    url = f"/api/groups/{group_id}/members"
+    db_client.post(url, json={"login": "ramazon"}, headers=aziza)
+    ramazon_id = db_client.get("/api/auth/me", headers=ramazon).json()["id"]
+    owner_id = db_client.get("/api/auth/me", headers=aziza).json()["id"]
 
-    assert (
-        db_client.delete(
-            f"/api/groups/{group_id}/members/{owner}", headers=ramazon
-        ).status_code
-        == 409
-    )
-    assert (
-        db_client.delete(
-            f"/api/groups/{group_id}/members/{me}", headers=ramazon
-        ).status_code
-        == 204
-    )
+    assert db_client.delete(f"{url}/{owner_id}", headers=aziza).status_code == 409
+    assert db_client.delete(f"{url}/{ramazon_id}", headers=aziza).status_code == 204
+    assert db_client.delete(f"{url}/{ramazon_id}", headers=aziza).status_code == 404
     assert members(db_client, group_id, aziza) == ["aziza"]
 
 
-def test_member_cannot_remove_others(db_client: TestClient, aziza, ramazon, group_id):
-    ali = auth_headers(db_client, "ali")
-    for login in ("ramazon", "ali"):
-        db_client.post(
-            f"/api/groups/{group_id}/members", json={"login": login}, headers=aziza
-        )
-    ali_id = db_client.get("/api/auth/me", headers=ali).json()["id"]
+def test_member_cannot_add_or_remove(db_client: TestClient, aziza, ramazon, group_id):
+    url = f"/api/groups/{group_id}/members"
+    auth_headers(db_client, "ali")
+    db_client.post(url, json={"login": "ramazon"}, headers=aziza)
+    ramazon_id = db_client.get("/api/auth/me", headers=ramazon).json()["id"]
 
-    response = db_client.delete(
-        f"/api/groups/{group_id}/members/{ali_id}", headers=ramazon
+    assert db_client.post(url, json={"login": "ali"}, headers=ramazon).status_code == (
+        403
     )
-
-    assert response.status_code == 403
+    assert db_client.delete(f"{url}/{ramazon_id}", headers=ramazon).status_code == 403
+    assert members(db_client, group_id, aziza) == ["aziza", "ramazon"]
 
 
 def test_delete_group(db_client: TestClient, aziza, ramazon, group_id) -> None:

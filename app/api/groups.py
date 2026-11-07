@@ -144,7 +144,7 @@ def add_member(
 def remove_member(
     group_id: int, member_id: int, user: CurrentUser, groups: GroupServiceDep
 ) -> Response:
-    """Owner removes anyone; a member can remove only themselves (leave)."""
+    """Only the owner removes members; the owner cannot be removed."""
     try:
         groups.remove_member(user, group_id, member_id)
     except GroupError as error:

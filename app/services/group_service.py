@@ -1,10 +1,10 @@
 """Groups: create, view, delete, add and remove members.
 
-Access rules:
-- only members can see a group (non-members get "not found", so ids leak nothing);
-- any member can add a new member;
-- the owner can remove anyone; other members can remove only themselves (leave);
-- the owner cannot leave; the owner deletes the group instead (soft delete).
+Access rules (technical specification, section 11):
+- a missing or deleted group -> GroupNotFoundError (404);
+- a user who is not a member -> GroupPermissionError (403);
+- only the owner adds members, removes members and deletes the group;
+- the owner cannot be removed; the owner deletes the group instead (soft delete).
 """
 
 import re
@@ -33,11 +33,11 @@ class InvalidGroupError(GroupError):
 
 
 class GroupNotFoundError(GroupError):
-    """The group does not exist, is deleted, or the user is not a member."""
+    """The group does not exist or is deleted."""
 
 
 class GroupPermissionError(GroupError):
-    """The user is a member but is not allowed to do this."""
+    """The user is not a member, or not the owner for owner-only actions."""
 
 
 class UserNotFoundError(GroupError):
@@ -112,16 +112,16 @@ class GroupService:
         return self._groups.list_for_user(user.id)
 
     def get_group(self, user: User, group_id: int) -> GroupDetails:
-        return self._details(self._visible_group(user, group_id))
+        return self._details(self._member_group(user, group_id))
 
     def delete_group(self, user: User, group_id: int) -> None:
-        group = self._visible_group(user, group_id)
-        if group.owner_id != user.id:
-            raise GroupPermissionError("Guruhni faqat egasi o'chira oladi")
+        group = self._owned_group(user, group_id, "Guruhni faqat egasi o'chira oladi")
         self._groups.mark_deleted(group.id)
 
     def add_member(self, user: User, group_id: int, login: str) -> GroupDetails:
-        group = self._visible_group(user, group_id)
+        group = self._owned_group(
+            user, group_id, "A'zoni faqat guruh egasi qo'sha oladi"
+        )
         new_member = self._find_user(login)
         if new_member is None:
             raise UserNotFoundError("Bunday foydalanuvchi topilmadi")
@@ -136,26 +136,30 @@ class GroupService:
         return self._details(group)
 
     def remove_member(self, user: User, group_id: int, member_id: int) -> None:
-        group = self._visible_group(user, group_id)
+        group = self._owned_group(
+            user, group_id, "A'zoni faqat guruh egasi chiqara oladi"
+        )
         if member_id == group.owner_id:
             raise OwnerCannotLeaveError(
                 "Guruh egasini chiqarib bo'lmaydi; guruhni o'chiring"
             )
-        if user.id != group.owner_id and user.id != member_id:
-            raise GroupPermissionError("Boshqa a'zoni faqat guruh egasi chiqara oladi")
         if not self._groups.is_member(group.id, member_id):
             raise MemberNotFoundError("Bu foydalanuvchi guruhda emas")
         # TODO: once expenses exist, refuse while the member's balance is non-zero.
         self._groups.remove_member(group.id, member_id)
 
-    def _visible_group(self, user: User, group_id: int) -> Group:
+    def _member_group(self, user: User, group_id: int) -> Group:
         group = self._groups.get_by_id(group_id)
-        if (
-            group is None
-            or group.is_deleted
-            or not self._groups.is_member(group_id, user.id)
-        ):
+        if group is None or group.is_deleted:
             raise GroupNotFoundError("Guruh topilmadi")
+        if not self._groups.is_member(group_id, user.id):
+            raise GroupPermissionError("Siz bu guruh a'zosi emassiz")
+        return group
+
+    def _owned_group(self, user: User, group_id: int, message: str) -> Group:
+        group = self._member_group(user, group_id)
+        if group.owner_id != user.id:
+            raise GroupPermissionError(message)
         return group
 
     def _find_user(self, login: str) -> User | None:

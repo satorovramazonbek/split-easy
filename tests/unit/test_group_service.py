@@ -97,13 +97,14 @@ def test_add_member_by_username_or_email(service, aziza, ramazon, ali) -> None:
     assert [m.is_owner for m in details.members] == [True, False, False]
 
 
-def test_any_member_can_add_members(service, aziza, ramazon, ali) -> None:
+def test_only_owner_can_add_members(service, aziza, ramazon, ali) -> None:
     group = service.create_group(aziza, "Sayohat").group
     service.add_member(aziza, group.id, "ramazon")
 
-    details = service.add_member(ramazon, group.id, "ali")
+    with pytest.raises(GroupPermissionError):
+        service.add_member(ramazon, group.id, "ali")
 
-    assert len(details.members) == 3
+    assert len(service.get_group(aziza, group.id).members) == 2
 
 
 def test_add_unknown_user(service, aziza) -> None:
@@ -121,20 +122,24 @@ def test_add_existing_member(service, aziza, ramazon) -> None:
         service.add_member(aziza, group.id, "ramazon")
 
 
-def test_non_member_cannot_see_or_change_group(service, aziza, ramazon) -> None:
+def test_non_member_gets_permission_error(service, aziza, ramazon) -> None:
     group = service.create_group(aziza, "Sayohat").group
 
-    with pytest.raises(GroupNotFoundError):
+    with pytest.raises(GroupPermissionError):
         service.get_group(ramazon, group.id)
-    with pytest.raises(GroupNotFoundError):
+    with pytest.raises(GroupPermissionError):
         service.add_member(ramazon, group.id, "ramazon")
-    with pytest.raises(GroupNotFoundError):
+    with pytest.raises(GroupPermissionError):
+        service.remove_member(ramazon, group.id, aziza.id)
+    with pytest.raises(GroupPermissionError):
         service.delete_group(ramazon, group.id)
 
 
 def test_missing_group(service, aziza) -> None:
     with pytest.raises(GroupNotFoundError):
         service.get_group(aziza, 999)
+    with pytest.raises(GroupNotFoundError):
+        service.add_member(aziza, 999, "aziza")
 
 
 def test_owner_removes_member(service, aziza, ramazon) -> None:
@@ -144,36 +149,27 @@ def test_owner_removes_member(service, aziza, ramazon) -> None:
     service.remove_member(aziza, group.id, ramazon.id)
 
     assert [m.username for m in service.get_group(aziza, group.id).members] == ["aziza"]
-    with pytest.raises(GroupNotFoundError):
+    assert service.list_groups(ramazon) == []
+    with pytest.raises(GroupPermissionError):
         service.get_group(ramazon, group.id)
 
 
-def test_member_can_leave(service, aziza, ramazon) -> None:
-    group = service.create_group(aziza, "Sayohat").group
-    service.add_member(aziza, group.id, "ramazon")
-
-    service.remove_member(ramazon, group.id, ramazon.id)
-
-    assert service.list_groups(ramazon) == []
-
-
-def test_member_cannot_remove_others(service, aziza, ramazon, ali) -> None:
+@pytest.mark.parametrize("target", ["ramazon", "ali"])
+def test_member_cannot_remove_anyone(service, aziza, ramazon, ali, target) -> None:
     group = service.create_group(aziza, "Sayohat").group
     service.add_member(aziza, group.id, "ramazon")
     service.add_member(aziza, group.id, "ali")
+    target_id = {"ramazon": ramazon.id, "ali": ali.id}[target]
 
     with pytest.raises(GroupPermissionError):
-        service.remove_member(ramazon, group.id, ali.id)
+        service.remove_member(ramazon, group.id, target_id)
 
 
-def test_owner_cannot_be_removed(service, aziza, ramazon) -> None:
+def test_owner_cannot_be_removed(service, aziza) -> None:
     group = service.create_group(aziza, "Sayohat").group
-    service.add_member(aziza, group.id, "ramazon")
 
     with pytest.raises(OwnerCannotLeaveError):
         service.remove_member(aziza, group.id, aziza.id)
-    with pytest.raises(OwnerCannotLeaveError):
-        service.remove_member(ramazon, group.id, aziza.id)
 
 
 def test_remove_non_member(service, aziza, ramazon) -> None:
