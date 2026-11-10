@@ -5,6 +5,7 @@ from dataclasses import replace
 
 from app.domain.models import Group, GroupMember, User
 from app.repositories.interfaces.group_repository import DuplicateMemberError
+from app.repositories.interfaces.user_repository import DuplicateUserError
 
 
 class InMemoryUserRepository:
@@ -27,6 +28,13 @@ class InMemoryUserRepository:
 
     def get_by_email(self, email: str) -> User | None:
         return next((u for u in self.users.values() if u.email == email), None)
+
+    def update_username(self, user_id: int, username: str) -> User:
+        if any(u.username == username and u.id != user_id for u in self.users.values()):
+            raise DuplicateUserError(username)
+        stored = replace(self.users[user_id], username=username)
+        self.users[user_id] = stored
+        return stored
 
 
 class InMemoryGroupRepository:
