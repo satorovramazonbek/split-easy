@@ -25,3 +25,9 @@ class UserRepository(Protocol):
     def get_by_username(self, username: str) -> User | None: ...
 
     def get_by_email(self, email: str) -> User | None: ...
+
+    def update_username(self, user_id: int, username: str) -> User:
+        """Save a new username and return the updated user.
+
+        Raises ``DuplicateUserError`` if another user has this username.
+        """
