@@ -17,7 +17,9 @@ from pydantic import ValidationError
 
 from app.api.auth import RegisterRequest
 from app.api.dependencies import AuthServiceDep, GroupServiceDep, ReportServiceDep
+from app.domain.exceptions import InvalidSplitError
 from app.domain.models import User
+from app.domain.settlement import simplify_debts
 from app.infrastructure.config import settings
 from app.services.auth_service import InvalidCredentialsError, UserAlreadyExistsError
 from app.services.group_service import (
@@ -285,6 +287,12 @@ def group_page(
 ):
     details = groups.get_group(user, group_id)  # 404 / 403 -> error page
     balances = reports.member_balances(user, group_id)
+    # FR-17: the settlement plan from the same balances the table shows.
+    try:
+        transfers = simplify_debts({b.user_id: b.balance for b in balances})
+    except InvalidSplitError:  # balances must add up to 0; show no plan otherwise
+        transfers = []
+    names = {b.user_id: b.username for b in balances}
     categories = reports.category_totals(user, group_id)
     monthly = reports.monthly_totals(user, group_id)
     return render(
@@ -295,6 +303,11 @@ def group_page(
         members=details.members,
         is_owner=details.group.owner_id == user.id,
         balances=balances,
+        balance_max=max((abs(b.balance) for b in balances), default=0),
+        my_balance=next((b.balance for b in balances if b.user_id == user.id), 0),
+        total_spent=sum(b.paid for b in balances),
+        transfers=transfers,
+        names=names,
         categories=categories,
         category_max=max((c.total for c in categories), default=0),
         monthly=monthly,
