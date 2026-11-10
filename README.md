@@ -76,24 +76,27 @@ Qo'llanilgan design patternlar: **Strategy**, **Factory**, **Repository**, **Obs
 
 ## Loyiha tuzilmasi
 
-Rejalashtirilgan tuzilma (loyiha rivojlanishi bilan to'ldirib boriladi):
-
 ```
 split-easy/
-├── .github/            # CI, PR va Issue shablonlari
+├── .github/workflows/  # CI: ruff, black, pytest --cov-fail-under=80
 ├── app/
-│   ├── domain/         # modellar, pul, bo'lish strategiyalari, balans, hodisalar
-│   ├── services/       # biznes mantiq
-│   ├── repositories/   # interfeyslar, SQLAlchemy va in-memory implementatsiyalar, SQL hisobotlar
-│   ├── db/             # ulanish va ORM modellari
-│   ├── exporters/      # CSV, JSON eksport
-│   ├── api/            # FastAPI routerlar
-│   ├── templates/      # Jinja2 sahifalar
+│   ├── domain/         # sof Python: modellar, pul, bo'lish strategiyalari, balans, hisob-kitob
+│   ├── services/       # biznes mantiq (Auth, Group, Report, QuickSplit)
+│   ├── repositories/
+│   │   ├── interfaces/ # abstrakt repository'lar va Unit of Work
+│   │   └── sqlalchemy/ # ORM modellari, repository'lar, Unit of Work, xom SQL hisobotlar
+│   ├── infrastructure/ # sozlamalar, baza ulanishi, parol xeshlash va JWT
+│   ├── api/            # FastAPI routerlar (/api/...)
+│   ├── web/            # Jinja2 sahifalar uchun routerlar
+│   ├── templates/      # Jinja2 shablonlar
+│   ├── static/         # CSS va JS
 │   └── main.py
-├── migrations/         # Alembic migratsiyalari
-├── scripts/            # seed.py, benchmark.py
-├── docs/               # texnik topshiriq, DB.md, ERD
-├── tests/              # unit va integratsion testlar
+├── migrations/         # Alembic migratsiyalari (0001–0005)
+├── scripts/            # seed.py, benchmark.py, draw_erd.py
+├── docs/               # texnik topshiriq, DB.md, ERD, schema.sql, benchmark.md
+├── tests/
+│   ├── unit/           # domain va servislar (bazasiz, veb'siz)
+│   └── integration/    # API, sahifalar, baza, SQL hisobotlar
 ├── DESIGN.md
 ├── pyproject.toml
 └── README.md
@@ -103,7 +106,8 @@ split-easy/
 
 ## O'rnatish va ishga tushirish
 
-> Loyiha ishlab chiqilish jarayonida. Quyidagi buyruqlar loyiha skeleti tayyor bo'lgach to'liq ishlaydi.
+Quyidagi qadamlar toza papkaga klon qilib tekshirilgan: o'rnatish va migratsiya taxminan
+20 soniya oladi.
 
 ### 1. Talablar
 
@@ -145,16 +149,20 @@ poetry run uvicorn app.main:app --reload
 - Tezkor hisob (ro'yxatdan o'tmasdan): http://127.0.0.1:8000
 - Ro'yxatdan o'tish / kirish: http://127.0.0.1:8000/register, http://127.0.0.1:8000/login
 - Guruhlarim va hisobotlar: http://127.0.0.1:8000/groups
-- API hujjatlari (Swagger): http://127.0.0.1:8000/docs
+- API hujjatlari (Swagger): http://127.0.0.1:8000/docs — barcha API yo'llari `/api/`
+  bilan boshlanadi, masalan `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/groups`
 
 ### 6. Testlar
 
 ```bash
-poetry run pytest                  # barcha testlar
-poetry run pytest --cov=app        # kod qamrovi bilan
-poetry run ruff check .            # kod sifati
-poetry run black --check .         # formatlash
+poetry run pytest                                     # barcha testlar
+poetry run pytest --cov=app --cov-report=term-missing # qamrov va qoplanmagan qatorlar
+poetry run ruff check .                               # kod sifati
+poetry run black --check .                            # formatlash
 ```
+
+CI har bir PR va `main`ga push'da shu tekshiruvlarni bajaradi; qamrov 80% dan past
+bo'lsa (`--cov-fail-under=80`), CI qizil bo'ladi.
 
 ### 7. Katta ma'lumot va benchmark (ixtiyoriy)
 
