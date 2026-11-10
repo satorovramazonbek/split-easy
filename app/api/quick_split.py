@@ -14,16 +14,25 @@ service = QuickSplitService()
 
 MAX_MEMBERS = 50
 MAX_EXPENSES = 500
+# Upper limits keep the arithmetic cheap: the split works with exact fractions,
+# so a value such as 1e-9999999 (a few bytes of JSON) would otherwise make the
+# server build numbers with millions of digits. 10**15 also stays below
+# JavaScript's largest exact integer (about 9 * 10**15).
+MAX_AMOUNT = 10**15
+MAX_VALUE = Decimal(MAX_AMOUNT)
+MAX_DECIMAL_PLACES = 6
 
 
 class ParticipantIn(BaseModel):
     user_id: int
-    value: Decimal | None = None
+    value: Decimal | None = Field(
+        default=None, le=MAX_VALUE, decimal_places=MAX_DECIMAL_PLACES
+    )
 
 
 class ExpenseIn(BaseModel):
     description: str = Field(default="", max_length=100)
-    amount: int
+    amount: int = Field(le=MAX_AMOUNT)
     paid_by: int
     split_type: str = "equal"
     participants: list[ParticipantIn] = Field(max_length=MAX_MEMBERS)

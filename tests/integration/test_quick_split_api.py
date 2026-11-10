@@ -125,3 +125,46 @@ def test_calculate_rejects_non_positive_amount(client: TestClient) -> None:
     response = client.post("/api/calculate", json=body)
 
     assert response.status_code == 400
+
+
+def shares_body(amount: int, first_share: str) -> dict:
+    return {
+        "members": [1, 2],
+        "expense": {
+            "amount": amount,
+            "paid_by": 1,
+            "split_type": "shares",
+            "participants": [
+                {"user_id": 1, "value": first_share},
+                {"user_id": 2, "value": "1"},
+            ],
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("amount", "first_share"),
+    [
+        (1000, "1e999999"),  # huge number -> huge exact fraction
+        (1000, "1e-999999"),  # tiny number -> huge denominator
+        (1000, "0.0000001"),  # more than 6 decimal places
+        (10**15 + 1, "1"),  # amount above the limit
+    ],
+)
+def test_preview_rejects_values_outside_limits(
+    client: TestClient, amount: int, first_share: str
+) -> None:
+    response = client.post(
+        "/api/expenses/preview", json=shares_body(amount, first_share)
+    )
+
+    assert response.status_code == 422
+
+
+def test_preview_accepts_values_at_limits(client: TestClient) -> None:
+    response = client.post(
+        "/api/expenses/preview", json=shares_body(10**15, "0.000001")
+    )
+
+    assert response.status_code == 200
+    assert sum(s["share_amount"] for s in response.json()["shares"]) == 10**15

@@ -10,7 +10,8 @@ class DuplicateMemberError(Exception):
 
 
 class MemberHasRecordsError(Exception):
-    """The member paid an expense or took part in a settlement in this group."""
+    """The member paid an expense, has a share in one or took part in a
+    settlement in this group."""
 
 
 class GroupRepository(Protocol):

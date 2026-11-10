@@ -9,7 +9,12 @@ from app.repositories.interfaces.group_repository import (
     DuplicateMemberError,
     MemberHasRecordsError,
 )
-from app.repositories.sqlalchemy.orm_models import GroupMemberORM, GroupORM
+from app.repositories.sqlalchemy.orm_models import (
+    ExpenseORM,
+    ExpenseShareORM,
+    GroupMemberORM,
+    GroupORM,
+)
 from app.repositories.sqlalchemy.user_repository import as_utc
 
 
@@ -79,6 +84,21 @@ class SqlAlchemyGroupRepository:
         return _member(row)
 
     def remove_member(self, group_id: int, user_id: int) -> None:
+        # A share does not reference group_members, so the database cannot
+        # refuse this case itself: without the check the member's debt would
+        # vanish from the group balances (they would no longer add up to 0).
+        has_shares = self._session.scalar(
+            select(
+                exists()
+                .where(ExpenseShareORM.expense_id == ExpenseORM.id)
+                .where(ExpenseORM.group_id == group_id)
+                .where(ExpenseShareORM.user_id == user_id)
+            )
+        )
+        if has_shares:
+            raise MemberHasRecordsError(
+                f"User {user_id} has expense shares in group {group_id}"
+            )
         try:
             with self._session.begin_nested():
                 self._session.execute(

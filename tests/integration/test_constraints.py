@@ -160,12 +160,22 @@ def test_group_with_expenses_cannot_be_hard_deleted(session: Session, world) -> 
         session.execute(text("DELETE FROM groups WHERE id = :g"), {"g": world["group"]})
 
 
-@pytest.mark.parametrize("record", ["expense", "settlement"])
+@pytest.mark.parametrize("record", ["expense", "share", "settlement"])
 def test_member_with_history_cannot_be_removed(
     session: Session, world, record: str
 ) -> None:
     if record == "expense":
         add_expense(session, world, paid_by=world["ramazon"])
+    elif record == "share":
+        # Aziza paid, Ramazon only owes his share: he is still part of the balance.
+        expense_id = add_expense(session, world)
+        session.execute(
+            text(
+                "INSERT INTO expense_shares (expense_id, user_id, share_amount)"
+                " VALUES (:e, :a, 150000), (:e, :r, 150000)"
+            ),
+            {"e": expense_id, "a": world["aziza"], "r": world["ramazon"]},
+        )
     else:
         add_settlement(session, world)
     users = SqlAlchemyUserRepository(session)

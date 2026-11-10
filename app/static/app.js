@@ -37,6 +37,12 @@
     node.append(...children);
     return node;
   };
+  // Same as node.replaceChildren(...children), which older browsers
+  // (e.g. the old Microsoft Edge on Windows 10) do not have.
+  const setChildren = (node, ...children) => {
+    node.textContent = "";
+    node.append(...children);
+  };
 
   function fmt(amount) {
     const sign = amount < 0 ? "−" : "";
@@ -110,7 +116,7 @@
   function renderExpenseForm() {
     const paidBy = $("expensePaidBy");
     const selected = paidBy.value;
-    paidBy.replaceChildren(el("option", { value: "", textContent: "Tanlang" }));
+    setChildren(paidBy, el("option", { value: "", textContent: "Tanlang" }));
     for (const p of state.participants) {
       paidBy.append(el("option", { value: p.id, textContent: p.name }));
     }
@@ -124,7 +130,7 @@
       ])
     );
     const splitType = $("expenseSplitType").value;
-    box.replaceChildren();
+    setChildren(box);
     for (const p of state.participants) {
       const prev = previous.get(String(p.id));
       const checkbox = el("input", {
@@ -241,7 +247,7 @@
     $("resultTotal").textContent = fmt(result.total);
 
     const list = $("transfersList");
-    list.replaceChildren();
+    setChildren(list);
     if (!result.transfers.length) {
       list.append(el("li", { className: "settled", textContent: "Hamma hisob-kitob qilingan — hech kim qarzdor emas. 🎉" }));
     }
@@ -250,7 +256,7 @@
     }
 
     const body = $("balancesBody");
-    body.replaceChildren();
+    setChildren(body);
     for (const m of result.members) {
       const cls = m.balance > 0 ? "pos" : m.balance < 0 ? "neg" : "";
       body.append(
@@ -279,7 +285,7 @@
     const text = lines.join("\n");
     try {
       await navigator.clipboard.writeText(text);
-    } catch {
+    } catch (clipboardError) {
       const area = el("textarea", { value: text });
       document.body.append(area);
       area.select();
@@ -302,7 +308,7 @@
   // ---------- Ko'rsatish ----------
   function renderParticipants() {
     const list = $("participantsList");
-    list.replaceChildren();
+    setChildren(list);
     for (const p of state.participants) {
       const remove = el("button", { type: "button", title: "O'chirish", textContent: "×" });
       remove.setAttribute("aria-label", `${p.name} ni o'chirish`);
@@ -314,7 +320,7 @@
 
   function renderExpenses() {
     const list = $("expensesList");
-    list.replaceChildren();
+    setChildren(list);
     for (const e of state.expenses) {
       const shares = e.shares.map((s) => `${nameOf(s.user_id)}: ${fmt(s.share_amount)}`).join(", ");
       const remove = el("button", { type: "button", className: "btn btn-sm btn-outline-danger", textContent: "O'chirish" });
