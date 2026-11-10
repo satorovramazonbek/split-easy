@@ -27,9 +27,29 @@ def test_index_page_is_served(client: TestClient) -> None:
     assert "/static/app.js" in response.text
 
 
-def test_static_files_are_served(client: TestClient) -> None:
-    assert client.get("/static/app.js").status_code == 200
-    assert client.get("/static/style.css").status_code == 200
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/static/app.js",
+        "/static/theme.css",
+        "/static/favicon.svg",
+        "/static/vendor/bootstrap/bootstrap.min.css",
+        "/static/vendor/bootstrap/bootstrap.bundle.min.js",
+        "/static/fonts/inter-latin-wght-normal.woff2",
+    ],
+)
+def test_static_files_are_served(client: TestClient, path: str) -> None:
+    assert client.get(path).status_code == 200
+
+
+@pytest.mark.parametrize("page", ["/", "/login", "/register"])
+def test_pages_work_without_internet(client: TestClient, page: str) -> None:
+    """The demo must not depend on a CDN: every asset is served locally."""
+    html = client.get(page).text
+
+    assert "cdn." not in html
+    assert "https://" not in html
+    assert 'id="i-users"' in html  # the icon sprite is inlined
 
 
 def test_preview_returns_shares(client: TestClient) -> None:
