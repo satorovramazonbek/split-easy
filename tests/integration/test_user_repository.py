@@ -51,3 +51,26 @@ def test_unique_constraints(session: Session, duplicate: User) -> None:
 
     # The savepoint is rolled back; the first user is still usable.
     assert repo.get_by_id(first.id) == first
+
+
+def test_update_username(session: Session) -> None:
+    repo = SqlAlchemyUserRepository(session)
+    user = repo.add(make_user())
+
+    updated = repo.update_username(user.id, "aziza_a")
+
+    assert updated.username == "aziza_a"
+    assert repo.get_by_username("aziza_a").id == user.id
+    assert repo.get_by_username("aziza") is None
+
+
+def test_update_username_to_taken_name_is_rejected(session: Session) -> None:
+    repo = SqlAlchemyUserRepository(session)
+    aziza = repo.add(make_user())
+    repo.add(make_user("ramazon", "ramazon@example.com"))
+
+    with pytest.raises(DuplicateUserError):
+        repo.update_username(aziza.id, "ramazon")
+
+    # Only the failed update was rolled back; the session still works.
+    assert repo.get_by_id(aziza.id).username == "aziza"

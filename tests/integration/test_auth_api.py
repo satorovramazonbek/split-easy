@@ -94,3 +94,47 @@ def test_me_with_invalid_token_returns_401(db_client: TestClient) -> None:
     )
 
     assert response.status_code == 401
+
+
+def auth_header(client: TestClient, name: str = "aziza") -> dict[str, str]:
+    token = login(client, name).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_change_username(db_client: TestClient) -> None:
+    register(db_client)
+
+    response = db_client.patch(
+        "/api/auth/me", json={"username": "Aziza_A"}, headers=auth_header(db_client)
+    )
+
+    assert response.status_code == 200
+    assert response.json()["username"] == "aziza_a"
+    assert login(db_client, "aziza_a").status_code == 200
+
+
+def test_change_username_to_taken_name_returns_409(db_client: TestClient) -> None:
+    register(db_client)
+    register(db_client, username="ramazon", email="ramazon@example.com")
+
+    response = db_client.patch(
+        "/api/auth/me", json={"username": "ramazon"}, headers=auth_header(db_client)
+    )
+
+    assert response.status_code == 409
+
+
+def test_change_username_validates_input(db_client: TestClient) -> None:
+    register(db_client)
+
+    response = db_client.patch(
+        "/api/auth/me", json={"username": "a b"}, headers=auth_header(db_client)
+    )
+
+    assert response.status_code == 422
+
+
+def test_change_username_requires_token(db_client: TestClient) -> None:
+    response = db_client.patch("/api/auth/me", json={"username": "aziza_a"})
+
+    assert response.status_code == 401
