@@ -44,6 +44,37 @@
     node.append(...children);
   };
 
+
+  // ---------- Icons and avatars (same look as the server-rendered pages) ----------
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  function icon(name, cls = "") {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", `icon ${cls}`.trim());
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS(SVG_NS, "use");
+    use.setAttribute("href", `#i-${name}`);
+    svg.append(use);
+    return svg;
+  }
+  // Same list and hash as app/web/templating.py (avatar_hue).
+  const AVATAR_HUES = [168, 199, 221, 262, 292, 338, 24, 43, 142, 186];
+  function avatarHue(name) {
+    let value = 0;
+    for (const ch of name) value = (value * 31 + ch.codePointAt(0)) % 1000003;
+    return AVATAR_HUES[value % AVATAR_HUES.length];
+  }
+  function initials(name) {
+    const parts = name.replace(/[_.]/g, " ").split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase() || "?";
+  }
+  function avatar(name, cls = "avatar-sm") {
+    const node = el("span", { className: `avatar ${cls}`, textContent: initials(name), title: name });
+    node.style.setProperty("--h", avatarHue(name));
+    node.setAttribute("aria-hidden", "true");
+    return node;
+  }
+
   function fmt(amount) {
     const sign = amount < 0 ? "−" : "";
     return sign + String(Math.abs(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm";
@@ -150,7 +181,7 @@
       });
       value.disabled = !checkbox.checked;
       checkbox.addEventListener("change", () => (value.disabled = !checkbox.checked));
-      const row = el("div", { className: "share-row" }, checkbox, el("label", { htmlFor: checkbox.id, textContent: p.name }), value);
+      const row = el("div", { className: "share-row" }, checkbox, avatar(p.name), el("label", { htmlFor: checkbox.id, textContent: p.name }), value);
       row.dataset.id = p.id;
       box.append(row);
     }
@@ -245,26 +276,47 @@
 
   function renderResults(result) {
     $("resultTotal").textContent = fmt(result.total);
+    $("resultPeople").textContent = String(result.members.length);
+    $("resultTransfers").textContent = String(result.transfers.length);
 
     const list = $("transfersList");
     setChildren(list);
     if (!result.transfers.length) {
-      list.append(el("li", { className: "settled", textContent: "Hamma hisob-kitob qilingan — hech kim qarzdor emas. 🎉" }));
+      list.append(el("li", { className: "settled" }, icon("check"), "Hamma hisob teng — hech kim qarzdor emas"));
     }
     for (const t of result.transfers) {
-      list.append(el("li", { textContent: `${nameOf(t.from_user_id)} → ${nameOf(t.to_user_id)}: ${fmt(t.amount)}` }));
+      const from = nameOf(t.from_user_id);
+      const to = nameOf(t.to_user_id);
+      list.append(
+        el("li", { className: "transfer" },
+          el("div", { className: "who" }, avatar(from), el("span", { textContent: from })),
+          el("div", { className: "flow" },
+            el("span", { className: "money", textContent: fmt(t.amount) }),
+            el("span", { className: "line" }, icon("arrow-right", "icon-sm"))
+          ),
+          el("div", { className: "who to" }, el("span", { textContent: to }), avatar(to))
+        )
+      );
     }
 
-    const body = $("balancesBody");
-    setChildren(body);
+    const box = $("balancesList");
+    setChildren(box);
+    const max = Math.max(1, ...result.members.map((m) => Math.abs(m.balance)));
     for (const m of result.members) {
-      const cls = m.balance > 0 ? "pos" : m.balance < 0 ? "neg" : "";
-      body.append(
-        el("tr", {},
-          el("td", { textContent: nameOf(m.user_id) }),
-          el("td", { className: "text-end", textContent: fmt(m.paid) }),
-          el("td", { className: "text-end", textContent: fmt(m.owed) }),
-          el("td", { className: `text-end ${cls}`, textContent: (m.balance > 0 ? "+" : "") + fmt(m.balance) })
+      const name = nameOf(m.user_id);
+      const cls = m.balance > 0 ? "pos" : m.balance < 0 ? "neg" : "muted";
+      const fill = el("div", { className: `fill ${cls}` });
+      fill.style.width = `${(Math.abs(m.balance) / max) * 50}%`;
+      box.append(
+        el("div", { className: "balance-row" },
+          el("div", { className: "who" }, avatar(name),
+            el("div", { className: "grow" },
+              el("div", { className: "title", textContent: name }),
+              el("div", { className: "meta", textContent: `to'ladi ${fmt(m.paid)} · ulushi ${fmt(m.owed)}` })
+            )
+          ),
+          el("div", { className: "diverge" }, fill),
+          el("div", { className: `money ${cls}`, textContent: (m.balance > 0 ? "+" : "") + fmt(m.balance) })
         )
       );
     }
@@ -310,10 +362,10 @@
     const list = $("participantsList");
     setChildren(list);
     for (const p of state.participants) {
-      const remove = el("button", { type: "button", title: "O'chirish", textContent: "×" });
+      const remove = el("button", { type: "button", title: "O'chirish" }, icon("x", "icon-sm"));
       remove.setAttribute("aria-label", `${p.name} ni o'chirish`);
       remove.addEventListener("click", () => removeParticipant(p.id));
-      list.append(el("span", { className: "chip" }, p.name, remove));
+      list.append(el("span", { className: "chip" }, avatar(p.name), p.name, remove));
     }
     $("participantsEmpty").classList.toggle("d-none", state.participants.length > 0);
   }
@@ -322,29 +374,45 @@
     const list = $("expensesList");
     setChildren(list);
     for (const e of state.expenses) {
-      const shares = e.shares.map((s) => `${nameOf(s.user_id)}: ${fmt(s.share_amount)}`).join(", ");
-      const remove = el("button", { type: "button", className: "btn btn-sm btn-outline-danger", textContent: "O'chirish" });
+      const shares = e.shares.map((s) => `${nameOf(s.user_id)}: ${fmt(s.share_amount)}`).join(" · ");
+      const remove = el("button", { type: "button", className: "btn btn-icon btn-ghost", title: "O'chirish" }, icon("trash-2", "icon-sm"));
+      remove.setAttribute("aria-label", `${e.description} xarajatini o'chirish`);
       remove.addEventListener("click", () => removeExpense(e.id));
       list.append(
         el("div", { className: "expense-item" },
-          el("div", {},
+          el("div", { className: "ex-icon" }, icon("receipt")),
+          el("div", { className: "grow" },
             el("div", { className: "fw-semibold", textContent: e.description }),
-            el("div", { className: "meta", textContent: `${nameOf(e.paid_by)} to'ladi · ${SPLIT_LABELS[e.split_type]}` }),
-            el("div", { className: "meta", textContent: shares })
+            el("div", { className: "meta" }, `${nameOf(e.paid_by)} to'ladi · ${SPLIT_LABELS[e.split_type]}`),
+            el("div", { className: "shares-line", textContent: shares, title: shares })
           ),
-          el("div", { className: "text-end d-flex flex-column gap-2 align-items-end" },
-            el("span", { className: "amount", textContent: fmt(e.amount) }),
-            remove
-          )
+          el("div", { className: "end" }, el("span", { className: "amount", textContent: fmt(e.amount) }), remove)
         )
       );
     }
+  }
+
+  function renderSummary() {
+    const box = $("actionsSummary");
+    const people = state.participants.length;
+    const count = state.expenses.length;
+    if (!people && !count) {
+      box.textContent = "Ishtirokchilar va xarajatlarni kiriting";
+      return;
+    }
+    const total = state.expenses.reduce((sum, e) => sum + e.amount, 0);
+    setChildren(box,
+      el("strong", { textContent: String(people) }), " ishtirokchi · ",
+      el("strong", { textContent: String(count) }), " xarajat · jami ",
+      el("strong", { textContent: fmt(total) })
+    );
   }
 
   function render() {
     renderParticipants();
     renderExpenseForm();
     renderExpenses();
+    renderSummary();
   }
 
   $("participantForm").addEventListener("submit", addParticipant);

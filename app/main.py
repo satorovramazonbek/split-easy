@@ -17,6 +17,7 @@ from app.api.reports import router as reports_router
 from app.services.group_service import GroupNotFoundError, GroupPermissionError
 from app.web.pages import (
     LoginRequiredError,
+    OptionalUser,
     group_error_handler,
     login_required_handler,
 )
@@ -40,5 +41,6 @@ app.add_exception_handler(GroupPermissionError, group_error_handler)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-def index(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "index.html")
+def index(request: Request, user: OptionalUser) -> HTMLResponse:
+    # The quick split itself needs no login; the user only changes the navbar.
+    return templates.TemplateResponse(request, "index.html", {"user": user})
