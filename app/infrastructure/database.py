@@ -32,11 +32,22 @@ def make_engine(url: str, **kwargs) -> Engine:
     if url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")
-        def _enable_foreign_keys(dbapi_connection, _record) -> None:
+        def _on_connect(dbapi_connection, _record) -> None:
+            # The sqlite3 driver delays BEGIN until the first INSERT/UPDATE. If a
+            # transaction starts with SAVEPOINT (session.begin_nested()), SQLite
+            # then treats the savepoint as the whole transaction and RELEASE
+            # commits it - a later rollback() can no longer undo it. Turn the
+            # driver's own BEGIN off and emit it ourselves (SQLAlchemy recipe
+            # "Serializable isolation / Savepoints / Transactional DDL").
+            dbapi_connection.isolation_level = None
             # SQLite ignores foreign keys unless this pragma is set per connection.
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
+
+        @event.listens_for(engine, "begin")
+        def _on_begin(connection) -> None:
+            connection.exec_driver_sql("BEGIN")
 
     return engine
 

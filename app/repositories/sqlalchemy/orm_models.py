@@ -25,7 +25,7 @@ from sqlalchemy import (
     Text,
     false,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.domain.models import Category, SplitType
 from app.infrastructure.database import Base
@@ -112,6 +112,15 @@ class ExpenseORM(Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    # Python-side link only (no schema change). The default lazy loading issues
+    # one query per expense when shares are read in a loop - the N+1 problem;
+    # list queries use selectinload() instead (see docs/DB.md, section 6).
+    shares: Mapped[list["ExpenseShareORM"]] = relationship(
+        order_by="ExpenseShareORM.user_id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,  # the database cascades the delete itself
+    )
 
 
 class ExpenseShareORM(Base):
