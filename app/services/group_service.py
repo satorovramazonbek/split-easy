@@ -160,8 +160,6 @@ class GroupService:
             )
         if not self._groups.is_member(group.id, member_id):
             raise MemberNotFoundError("Bu foydalanuvchi guruhda emas")
-        # TODO: when the expense service exists, also refuse a member who only
-        # appears in expense shares (the database guards payers and settlements).
         try:
             self._groups.remove_member(group.id, member_id)
         except MemberHasRecordsError as error:
