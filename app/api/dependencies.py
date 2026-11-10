@@ -12,6 +12,7 @@ from app.infrastructure.database import get_session
 from app.infrastructure.security import Argon2PasswordHasher, JwtTokenService
 from app.repositories.sqlalchemy.group_repository import SqlAlchemyGroupRepository
 from app.repositories.sqlalchemy.report_repository import SqlAlchemyReportRepository
+from app.repositories.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from app.repositories.sqlalchemy.user_repository import SqlAlchemyUserRepository
 from app.services.auth_service import AuthService, InvalidCredentialsError
 from app.services.group_service import GroupService
@@ -68,3 +69,11 @@ def get_report_service(session: SessionDep) -> ReportService:
 
 
 ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
+
+
+def get_unit_of_work(session: SessionDep) -> SqlAlchemyUnitOfWork:
+    """For services that write several tables at once (expenses, settlements)."""
+    return SqlAlchemyUnitOfWork(session)
+
+
+UnitOfWorkDep = Annotated[SqlAlchemyUnitOfWork, Depends(get_unit_of_work)]
