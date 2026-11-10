@@ -1,44 +1,79 @@
-<!doctype html>
-<html lang="uz">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SplitEasy — xarajatlarni oson bo'lishing</title>
-  <meta name="description" content="Ro'yxatdan o'tmasdan guruh xarajatlarini bo'lishing: kim to'lagan, kim kimga qancha qarzdor.">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="{{ url_for('static', path='style.css') }}" rel="stylesheet">
-</head>
-<body>
-  <header class="hero">
-    <div class="container">
-      <h1 class="hero-title">💸 SplitEasy</h1>
-      <p class="hero-subtitle">Guruh xarajatlarini ro'yxatdan o'tmasdan, bir zumda bo'lishing</p>
-      <span class="badge-note">⚠️ Ma'lumotlar saqlanmaydi — sahifa yangilansa o'chib ketadi</span>
+{% extends "base.html" %}
+{% from "_ui.html" import icon, avatar %}
+{% block title %}Tezkor hisob{% endblock %}
+{% block meta %}<meta name="description" content="Ro'yxatdan o'tmasdan guruh xarajatlarini bo'lishing: kim to'lagan, kim kimga qancha qarzdor.">{% endblock %}
+{% block band_class %}topband-tall{% endblock %}
+{% block nav_quick %}active{% endblock %}
+
+{% block hero %}
+<header class="container hero-grid">
+  <div class="rise">
+    <span class="pill pill-glass">{{ icon('sparkles', 'icon-sm') }} Ro'yxatdan o'tmasdan · bepul</span>
+    <h1 class="hero-title">Kim kimga qancha qarz —<br><span class="accent">bir zumda.</span></h1>
+    <p class="hero-lead">Sayohat, ijara yoki do'stlar bilan kechki ovqat: xarajatlarni kiriting, SplitEasy eng kam o'tkazma bilan hisob-kitob qilib beradi.</p>
+    <div class="hero-actions">
+      <a href="#start" class="btn btn-lg btn-white">{{ icon('calculator') }} Hisoblashni boshlash</a>
+      {% if not user %}<a href="/register" class="btn btn-lg btn-light-glass">Guruh yaratish {{ icon('arrow-right') }}</a>{% endif %}
     </div>
-  </header>
+    <p class="hero-note">{{ icon('triangle-alert', 'icon-sm') }} Bu sahifadagi ma'lumotlar saqlanmaydi — sahifa yangilansa o'chib ketadi.</p>
+  </div>
 
-  <main class="container main">
-    <section class="card-se">
-      <ol class="steps">
-        <li>Ishtirokchilarni qo'shing</li>
-        <li>Har bir xarajatni va kim to'laganini kiriting</li>
-        <li>Xarajat kimlar o'rtasida bo'linishini belgilang</li>
-        <li>«Hisoblash» tugmasini bosing — kim kimga qancha to'lashini ko'ring</li>
-      </ol>
-    </section>
+  <div class="demo-wrap rise" aria-hidden="true" style="animation-delay: .1s">
+    <div class="demo-card">
+      <div class="demo-head">
+        <span class="avatar avatar-lg avatar-square" style="--h: 199">{{ icon('layers') }}</span>
+        <div>
+          <div class="title">Samarqand sayohati</div>
+          <div class="avatar-stack mt-1">
+            {% for n in ["Ali", "Vali", "Sardor", "Dilshod"] %}{{ avatar(n, 'avatar-sm') }}{% endfor %}
+          </div>
+        </div>
+        <div class="demo-total"><div class="muted small">Jami</div><div class="money">800 000 so'm</div></div>
+      </div>
+      <ul class="transfers">
+        {% for a, b, s in [("Dilshod", "Ali", "200 000"), ("Vali", "Sardor", "100 000")] %}
+        <li class="transfer">
+          <div class="who">{{ avatar(a, 'avatar-sm') }}<span>{{ a }}</span></div>
+          <div class="flow"><span class="money">{{ s }} so'm</span><span class="line">{{ icon('arrow-right', 'icon-sm') }}</span></div>
+          <div class="who to"><span>{{ b }}</span>{{ avatar(b, 'avatar-sm') }}</div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="demo-float">{{ icon('zap', 'icon-sm') }} 2 ta o'tkazma — hamma hisob teng</div>
+  </div>
+</header>
+{% endblock %}
 
-    <section class="card-se">
-      <h2 class="card-title">👥 Ishtirokchilar</h2>
+{% block content %}
+<div id="start" class="row g-4">
+  <div class="col-lg-4">
+    <section class="card-se h-100">
+      <div class="card-head">
+        <span class="step-num">1</span>
+        <div><h2>Ishtirokchilar</h2><p class="sub">Kimlar xarajat qildi?</p></div>
+      </div>
       <form id="participantForm" class="d-flex gap-2" autocomplete="off">
-        <input type="text" id="participantName" class="form-control" placeholder="Ism, masalan: Ali" maxlength="20">
-        <button type="submit" class="btn btn-primary text-nowrap">Qo'shish</button>
+        <div class="input-icon flex-grow-1">
+          {{ icon('user-plus') }}
+          <input type="text" id="participantName" class="form-control" placeholder="Ism, masalan: Ali" maxlength="20" aria-label="Ishtirokchi ismi">
+        </div>
+        <button type="submit" class="btn btn-primary px-3" title="Qo'shish" aria-label="Qo'shish">{{ icon('plus') }}</button>
       </form>
       <div id="participantsList" class="chips"></div>
-      <p id="participantsEmpty" class="text-muted small mb-0">Hali ishtirokchi yo'q.</p>
+      <div id="participantsEmpty" class="empty">
+        <div class="icon-wrap">{{ icon('users') }}</div>
+        <p>Hali ishtirokchi yo'q.<br><span class="small">Kamida 2 kishini qo'shing.</span></p>
+      </div>
     </section>
+  </div>
 
-    <section class="card-se">
-      <h2 class="card-title">🧾 Xarajatlar</h2>
+  <div class="col-lg-8">
+    <section class="card-se h-100">
+      <div class="card-head">
+        <span class="step-num">2</span>
+        <div><h2>Xarajatlar</h2><p class="sub">Kim, nimaga, qancha to'ladi?</p></div>
+      </div>
       <form id="expenseForm" autocomplete="off">
         <div class="row g-3">
           <div class="col-md-6">
@@ -65,52 +100,60 @@
             </select>
           </div>
           <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="d-flex justify-content-between align-items-center mb-2">
               <span class="form-label mb-0">Kimlar o'rtasida bo'linadi</span>
-              <button type="button" id="toggleAll" class="btn btn-link btn-sm p-0">Hammasi</button>
+              <button type="button" id="toggleAll" class="btn btn-sm btn-soft">{{ icon('check', 'icon-sm') }} Hammasi</button>
             </div>
             <div id="expenseShares" class="share-list"></div>
-            <div id="splitHint" class="form-text"></div>
+            <div id="splitHint" class="form-text mt-2"></div>
           </div>
         </div>
         <div id="expenseError" class="alert alert-danger py-2 mt-3 d-none"></div>
-        <button type="submit" class="btn btn-success mt-3">Xarajat qo'shish</button>
+        <button type="submit" class="btn btn-primary mt-3">{{ icon('plus') }} Xarajat qo'shish</button>
       </form>
 
       <div id="expensesList" class="expenses-list"></div>
     </section>
+  </div>
+</div>
 
-    <div class="actions">
-      <button type="button" id="calculateBtn" class="btn btn-primary btn-lg">Hisoblash</button>
-      <button type="button" id="resetBtn" class="btn btn-outline-secondary btn-lg">Hammasini tozalash</button>
+<div class="actions-bar">
+  <div class="summary" id="actionsSummary">Ishtirokchilar va xarajatlarni kiriting</div>
+  <button type="button" id="resetBtn" class="btn btn-light-glass">{{ icon('rotate-ccw', 'icon-sm') }} Tozalash</button>
+  <button type="button" id="calculateBtn" class="btn btn-white">{{ icon('calculator', 'icon-sm') }} Hisoblash</button>
+</div>
+<div id="calcError" class="alert alert-danger mt-3 d-none"></div>
+
+<section id="resultsSection" class="card-se mt-4 d-none rise">
+  <div class="card-head">
+    <span class="step-num">3</span>
+    <div><h2>Natija</h2><p class="sub">Eng kam o'tkazma bilan hisob-kitob</p></div>
+    <div class="end">
+      <span id="copyStatus" class="small text-success me-2"></span>
+      <button type="button" id="copyBtn" class="btn btn-sm btn-soft">{{ icon('copy', 'icon-sm') }} Nusxa olish</button>
     </div>
-    <div id="calcError" class="alert alert-danger d-none"></div>
+  </div>
 
-    <section id="resultsSection" class="card-se d-none">
-      <h2 class="card-title">📊 Natija</h2>
-      <p class="total">Jami xarajat: <strong id="resultTotal"></strong></p>
+  <div class="result-tiles">
+    <div class="result-tile main"><div class="label">Jami xarajat</div><div class="value" id="resultTotal"></div></div>
+    <div class="result-tile"><div class="label">Ishtirokchilar</div><div class="value" id="resultPeople"></div></div>
+    <div class="result-tile"><div class="label">O'tkazmalar</div><div class="value" id="resultTransfers"></div></div>
+  </div>
 
+  <div class="row g-4">
+    <div class="col-lg-6">
       <h3 class="sub-title">Kim kimga to'laydi</h3>
       <ul id="transfersList" class="transfers"></ul>
-
+    </div>
+    <div class="col-lg-6">
       <h3 class="sub-title">Balanslar</h3>
-      <div class="table-responsive">
-        <table class="table table-sm align-middle">
-          <thead>
-            <tr><th>Ishtirokchi</th><th class="text-end">To'lagan</th><th class="text-end">Ulushi</th><th class="text-end">Balans</th></tr>
-          </thead>
-          <tbody id="balancesBody"></tbody>
-        </table>
-      </div>
+      <div id="balancesList"></div>
+      <p class="small muted mt-2 mb-0">O'ngga (yashil) — unga qarz, chapga (qizil) — u qarzdor.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
 
-      <button type="button" id="copyBtn" class="btn btn-primary">Natijadan nusxa olish</button>
-      <span id="copyStatus" class="ms-2 text-success small"></span>
-    </section>
-  </main>
+{% block footer %}SplitEasy · ro'yxatdan o'tishsiz, bazasiz · ma'lumotlar faqat brauzer xotirasida{% if not user %} · <a href="/login">Guruhlarni saqlash uchun kiring</a>{% endif %}{% endblock %}
 
-  <footer class="footer">SplitEasy · ro'yxatdan o'tishsiz, bazasiz · ma'lumotlar faqat brauzer xotirasida
-    · <a href="/login">Guruhlarni saqlash uchun kiring</a></footer>
-
-  <script src="{{ url_for('static', path='app.js') }}"></script>
-</body>
-</html>
+{% block scripts %}<script src="{{ url_for('static', path='app.js') }}"></script>{% endblock %}
