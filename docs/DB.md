@@ -251,27 +251,74 @@ uchun `ix_expenses_group_id_expense_date_id` oxirida `id` bor: guruh xarajatlari
 
 ## 6. N+1 muammosi
 
-> ⏳ Keyingi bosqich: xarajatlar ro'yxati (TZ 10.6). Hozircha guruh a'zolarining
-> ismlari bitta `IN (...)` so'rovi bilan olinadi (`UserRepository.get_many`) — a'zolar
-> soniga qarab so'rovlar ko'paymaydi.
+**Muammo.** Guruh xarajatlari ro'yxatida har bir xarajat o'z ulushlari (`expense_shares`)
+bilan qaytariladi. ORM'da `ExpenseORM.shares` munosabati standart holatda *lazy*:
+ro'yxat bitta so'rov bilan olinadi, keyin har bir xarajatning `.shares` iga tegilganda
+yana bitta so'rov ketadi. 100 ta xarajat → **1 + 100 = 101** so'rov.
+
+**Yechim.** `SqlAlchemyExpenseRepository` ro'yxatni `selectinload(ExpenseORM.shares)` bilan
+oladi: bitta so'rov xarajatlar sahifasi uchun, bitta
+`SELECT ... FROM expense_shares WHERE expense_id IN (...)` hamma ulushlar uchun. Sahifa
+hajmi qancha bo'lmasin, so'rovlar soni **2** ta.
+
+| Holat | 100 ta xarajat uchun SQL so'rovlari | Test |
+|---|---:|---|
+| Oldin: lazy loading, `.shares` siklda | 101 | `test_n_plus_one_before_lazy_loading` |
+| Keyin: `list_for_group` (`selectinload`) | 2 (TZ: ≤ 3) | `test_n_plus_one_after_selectinload` |
+
+So'rovlar `before_cursor_execute` hodisasi orqali sanaladi (`BEGIN`/`COMMIT`/`SAVEPOINT`
+hisobga olinmaydi), testlar `tests/integration/test_expense_repositories.py` da.
+`joinedload` ham bitta so'rovga tushirardi, lekin `LIMIT` bilan birga xarajat qatorlarini
+ulushlar soniga ko'paytirib yuboradi — sahifalash uchun `selectinload` to'g'riroq.
+
+Guruh a'zolarining ismlari ham bitta `IN (...)` so'rovi bilan olinadi
+(`UserRepository.get_many`) — a'zolar soniga qarab so'rovlar ko'paymaydi.
 
 ---
 
 ## 7. Tranzaksiyalar va ACID
 
-**Hozirgi holat:** har bir HTTP so'rov bitta sessiya va bitta tranzaksiyada ishlaydi
+**HTTP so'rov darajasi.** Har bir so'rov bitta sessiya va bitta tranzaksiyada ishlaydi
 (`get_session`): muvaffaqiyatda `commit`, xatoda `rollback`. Masalan, guruh yaratish
 (`groups` qatori + egasining `group_members` qatori) bitta tranzaksiya — yarim yaratilgan
-guruh qolmaydi. Kutilgan xatolar (takroriy a'zo, tarixi bor a'zoni chiqarish) **savepoint**
-(`begin_nested`) ichida ushlanadi: faqat o'sha qadam bekor qilinadi, tranzaksiya davom etadi.
+guruh qolmaydi.
 
-> ⏳ TZ 10.4 tranzaksiya chegarasini **servis qatlamida** belgilashni talab qiladi.
-> Xarajat servisi bilan birga Unit of Work qo'shiladi: servis `with uow:` ichida
-> xarajat va barcha ulushlarni yozadi.
+**Servis darajasi: Unit of Work (TZ 10.4).** Qaysi yozuvlar birga saqlanishi kerakligini
+faqat servis biladi, shuning uchun tranzaksiya chegarasi servisda belgilanadi:
+
+```python
+with uow:
+    expense = uow.expenses.add(expense)          # xarajat + barcha ulushlar
+    uow.notifications.add_many(notifications)
+    uow.commit()                                 # shu qatorsiz hech narsa saqlanmaydi
+```
+
+`SqlAlchemyUnitOfWork` barcha repository'larga (`users`, `groups`, `expenses`,
+`settlements`, `notifications`) bitta sessiyani beradi. `with` bloki `commit()` siz yoki
+xato bilan tugasa, hamma narsa `rollback` qilinadi — "commit qilishni unutish" ham yarim
+operatsiyani saqlab qo'ymaydi. Xarajatni tahrirlash (eski ulushlarni o'chirib, yangilarini
+yozish) ham shu tranzaksiya ichida: biror qadam xato bersa, eski xarajat o'zgarmaydi.
+
+**Savepoint.** Kutilgan xatolar (takroriy a'zo, mavjud bo'lmagan foydalanuvchi) repository
+ichida `begin_nested()` (SAVEPOINT) bilan ushlanadi: faqat o'sha qadam bekor qilinadi,
+tashqi tranzaksiya davom etadi. SQLite drayveri `BEGIN` ni birinchi `INSERT` gacha
+kechiktirgani uchun tranzaksiya SAVEPOINT bilan boshlansa, `RELEASE` uni darhol commit
+qilib yuborardi. Shuning uchun `make_engine` drayverning o'z `BEGIN` ini o'chirib,
+uni o'zi yuboradi (`app/infrastructure/database.py`).
+
+Testlar (`tests/integration/test_expense_repositories.py`):
+
+| Test | Nimani isbotlaydi |
+|---|---|
+| `test_commit_saves_expense_and_notifications` | `commit()` dan keyin xarajat, ulushlar va bildirishnoma bazada |
+| `test_no_commit_means_nothing_saved` | `commit()` chaqirilmasa, hech narsa saqlanmaydi |
+| `test_error_rolls_back_the_whole_unit` | hisob-kitob yozuvi bazada xato bersa, oldin yozilgan xarajat ham bekor bo'ladi |
+| `test_python_error_rolls_back_too` | bazaga aloqasi yo'q Python xatosida ham rollback |
+| `test_failed_replace_keeps_old_shares` | tahrirlash yarmida xato bo'lsa, eski ulushlar joyida qoladi |
 
 | ACID | Loyihada qayerda |
 |---|---|
-| **A**tomicity | Xarajat va uning ulushlari, guruh va egasining a'zoligi — yo hammasi, yo hech biri yoziladi |
+| **A**tomicity | Unit of Work: xarajat va uning ulushlari, guruh va egasining a'zoligi — yo hammasi, yo hech biri yoziladi |
 | **C**onsistency | `CHECK`, `FOREIGN KEY`, `UNIQUE` har bir tranzaksiya oxirida bazani to'g'ri holatda saqlaydi; buzilsa `IntegrityError` va `rollback` |
 | **I**solation | SQLite yozishda butun bazani bloklaydi — bir vaqtda ikki yozuvchi bir-birining yarim natijasini ko'rmaydi |
 | **D**urability | `commit` dan keyin ma'lumot faylda (SQLite jurnali), server qayta ishga tushsa ham qoladi |
