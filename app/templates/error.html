@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon %}
 {% block title %}{{ code }}{% endblock %}
 {% block content %}
-<section class="card-se text-center py-5">
+<section class="card-se text-center py-5 rise" style="max-width: 560px; margin: 0 auto;">
   <div class="error-code">{{ code }}</div>
-  <h1 class="card-title">{{ message }}</h1>
-  <a href="/groups" class="btn btn-primary mt-2">Guruhlarimga qaytish</a>
+  <h1 class="h4 fw-bold mt-3">{{ message }}</h1>
+  <p class="muted">{{ "Bunday guruh yo'q yoki o'chirilgan." if code == 404 else "Bu sahifani faqat guruh a'zolari ko'ra oladi." }}</p>
+  <a href="/groups" class="btn btn-primary mt-2">{{ icon('chevron-left', 'icon-sm') }} Guruhlarimga qaytish</a>
 </section>
 {% endblock %}

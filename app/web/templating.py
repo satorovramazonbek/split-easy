@@ -29,6 +29,27 @@ def money(amount: float | None, currency: str = "so'm") -> str:
     return f"{'-' if value < 0 else ''}{text}\u00a0{currency}"
 
 
+# Avatar colours: hues that read well as a pastel background with dark text.
+# static/app.js has the same list and hash, so a name gets the same colour
+# on every page.
+AVATAR_HUES = [168, 199, 221, 262, 292, 338, 24, 43, 142, 186]
+
+
+def avatar_hue(name: str) -> int:
+    value = 0
+    for char in name:
+        value = (value * 31 + ord(char)) % 1_000_003
+    return AVATAR_HUES[value % len(AVATAR_HUES)]
+
+
+def initials(name: str) -> str:
+    """'Ali Valiyev' -> 'AV', 'aziza_a' -> 'AA', 'Ali' -> 'AL'."""
+    parts = [p for p in name.replace("_", " ").replace(".", " ").split() if p]
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[1][0]).upper()
+    return name[:2].upper() if name else "?"
+
+
 def category_label(value: str) -> str:
     return CATEGORY_LABELS.get(value, value)
 
@@ -49,3 +70,5 @@ templates.env.filters["money"] = money
 templates.env.filters["category"] = category_label
 templates.env.filters["month"] = month_label
 templates.env.filters["human_date"] = human_date
+templates.env.filters["avatar_hue"] = avatar_hue
+templates.env.filters["initials"] = initials
