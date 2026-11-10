@@ -57,6 +57,20 @@ class SqlAlchemyUserRepository:
         rows = self._session.scalars(select(UserORM).where(UserORM.id.in_(ids)))
         return {row.id: _to_domain(row) for row in rows}
 
+    def update_username(self, user_id: int, username: str) -> User:
+        row = self._session.get(UserORM, user_id)
+        if row is None:
+            raise LookupError(f"User {user_id} does not exist")
+        try:
+            with self._session.begin_nested():
+                row.username = username
+                self._session.flush()
+        except IntegrityError as error:
+            # The savepoint rollback expires the row; reload the stored name.
+            self._session.refresh(row)
+            raise DuplicateUserError(str(error.orig)) from error
+        return _to_domain(row)
+
     def get_by_username(self, username: str) -> User | None:
         return self._one(select(UserORM).where(UserORM.username == username))
 

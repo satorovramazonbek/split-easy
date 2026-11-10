@@ -91,6 +91,23 @@ class AuthService:
             raise InvalidCredentialsError("Login yoki parol noto'g'ri")
         return self._tokens.create_access_token(user.id)
 
+    def change_username(self, user: User, username: str) -> User:
+        """FR-4: the user edits their profile name (the username).
+
+        The name is normalized like at registration, so login keeps working
+        with any letter case. Keeping the current name is not an error.
+        """
+        username = normalize_username(username)
+        if username == user.username:
+            return user
+        if self._users.get_by_username(username):
+            raise UserAlreadyExistsError("Bu foydalanuvchi nomi band")
+        try:
+            return self._users.update_username(user.id, username)
+        except DuplicateUserError as error:
+            # Lost a race with a concurrent change or registration.
+            raise UserAlreadyExistsError("Bu foydalanuvchi nomi band") from error
+
     def get_current_user(self, token: str) -> User:
         user_id = self._tokens.decode_user_id(token)
         user = self._users.get_by_id(user_id) if user_id is not None else None

@@ -14,10 +14,17 @@ from app.services.auth_service import InvalidCredentialsError, UserAlreadyExists
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+USERNAME_FIELD = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_.]+$")
+
+
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_.]+$")
+    username: str = USERNAME_FIELD
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+
+
+class ProfileUpdate(BaseModel):
+    username: str = USERNAME_FIELD
 
 
 class UserOut(BaseModel):
@@ -69,3 +76,15 @@ def login(
 @router.get("/me", response_model=UserOut)
 def me(user: CurrentUser) -> UserOut:
     return UserOut.from_domain(user)
+
+
+@router.patch("/me", response_model=UserOut)
+def update_me(
+    request: ProfileUpdate, user: CurrentUser, auth: AuthServiceDep
+) -> UserOut:
+    """FR-4: change the profile name (username)."""
+    try:
+        updated = auth.change_username(user, request.username)
+    except UserAlreadyExistsError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(error)) from error
+    return UserOut.from_domain(updated)

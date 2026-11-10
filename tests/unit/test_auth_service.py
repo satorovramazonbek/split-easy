@@ -113,3 +113,53 @@ def test_get_current_user_rejects_invalid_token(
 ) -> None:
     with pytest.raises(InvalidCredentialsError):
         service.get_current_user(token)
+
+
+# --- Profile: change username (FR-4) -------------------------------------------
+
+
+def test_change_username_saves_normalized_name(service: AuthService, repo) -> None:
+    user = service.register("aziza", "aziza@example.com", "secret123")
+
+    updated = service.change_username(user, "  Aziza_A ")
+
+    assert updated.username == "aziza_a"
+    assert repo.get_by_id(user.id).username == "aziza_a"
+    assert updated.email == user.email
+
+
+def test_change_username_lets_user_log_in_with_new_name(service: AuthService) -> None:
+    user = service.register("aziza", "aziza@example.com", "secret123")
+
+    service.change_username(user, "aziza_a")
+
+    assert service.login("aziza_a", "secret123") == f"token-{user.id}"
+    with pytest.raises(InvalidCredentialsError):
+        service.login("aziza", "secret123")
+
+
+def test_change_username_rejects_name_of_another_user(service: AuthService) -> None:
+    user = service.register("aziza", "aziza@example.com", "secret123")
+    service.register("ramazon", "ramazon@example.com", "secret123")
+
+    with pytest.raises(UserAlreadyExistsError):
+        service.change_username(user, "Ramazon")
+
+
+def test_change_username_to_same_name_is_allowed(service: AuthService) -> None:
+    user = service.register("aziza", "aziza@example.com", "secret123")
+
+    assert service.change_username(user, "AZIZA").username == "aziza"
+
+
+def test_change_username_lost_race_is_reported_as_taken(service: AuthService) -> None:
+    user = service.register("aziza", "aziza@example.com", "secret123")
+
+    class RacingRepo(InMemoryUserRepository):
+        def update_username(self, user_id: int, username: str) -> User:
+            raise DuplicateUserError(username)
+
+    racing = AuthService(RacingRepo(), FakeHasher(), FakeTokens(), clock=lambda: NOW)
+
+    with pytest.raises(UserAlreadyExistsError):
+        racing.change_username(user, "ramazon")
