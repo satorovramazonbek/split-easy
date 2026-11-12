@@ -21,6 +21,13 @@ def bobur(db_client: TestClient) -> dict[str, str]:
     return auth_headers(db_client, "bobur")
 
 
+def _headers(client: TestClient, username: str) -> dict[str, str]:
+    token = client.post(
+        "/api/auth/login", data={"username": username, "password": "secret123"}
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def me(client: TestClient, headers) -> int:
     return client.get("/api/auth/me", headers=headers).json()["id"]
 
@@ -198,11 +205,12 @@ def test_list_is_paginated_newest_first(db_client, group, aziza) -> None:
         )
 
     page = db_client.get(
-        f"/api/groups/{group['id']}/expenses?limit=2&offset=1", headers=aziza
+        f"/api/groups/{group['id']}/expenses?page=2&page_size=2", headers=aziza
     ).json()
 
     assert page["total"] == 5
-    assert [e["description"] for e in page["items"]] == ["X4", "X3"]
+    assert page["pages"] == 3
+    assert [e["description"] for e in page["items"]] == ["X3", "X2"]
 
 
 def test_get_expense(db_client, group, aziza) -> None:
@@ -281,6 +289,8 @@ def test_settlement_clears_debt(db_client, group, aziza, ramazon) -> None:
 
 
 def test_settlement_rules(db_client, group, aziza, ramazon, bobur) -> None:
+    # aziza paid 300 000 for three: ramazon and bobur owe her 100 000 each.
+    add_expense(db_client, group, aziza)
     url = f"/api/groups/{group['id']}/settlements"
 
     def settle(headers, frm, to, amount=1000):
@@ -296,8 +306,8 @@ def test_settlement_rules(db_client, group, aziza, ramazon, bobur) -> None:
 
     # bobur is neither party nor owner
     assert settle(bobur, "ramazon", "aziza").status_code == 403
-    # the owner may record any payment
-    assert settle(aziza, "ramazon", "bobur").status_code == 201
+    # the owner may record a payment of others
+    assert settle(aziza, "ramazon", "aziza").status_code == 201
     response = settle(ramazon, "ramazon", "ramazon")
     assert response.status_code == 400
     assert "O'zingizga" in response.json()["detail"]
@@ -309,6 +319,58 @@ def test_settlement_rules(db_client, group, aziza, ramazon, bobur) -> None:
         headers=aziza,
     )
     assert response.status_code == 400
+
+
+def test_settlement_cannot_be_more_than_the_debt(
+    db_client, group, aziza, ramazon
+) -> None:
+    """A double click on "To'landi" must not turn the debt into a credit."""
+    add_expense(db_client, group, aziza)  # ramazon owes 100 000
+    url = f"/api/groups/{group['id']}/settlements"
+    body = {"from_user_id": group["ramazon"], "to_user_id": group["aziza"]}
+
+    too_much = db_client.post(url, json={**body, "amount": 100_001}, headers=ramazon)
+    assert too_much.status_code == 400
+    assert "qarzdan oshmasligi" in too_much.json()["detail"]
+    assert (
+        db_client.post(
+            url, json={**body, "amount": 100_000}, headers=ramazon
+        ).status_code
+        == 201
+    )
+    again = db_client.post(url, json={**body, "amount": 100_000}, headers=ramazon)
+    assert again.status_code == 400  # nothing is owed any more
+    assert balances(db_client, group, aziza)[group["ramazon"]] == 0
+    # the creditor cannot "pay" the debtor either
+    reverse = {
+        "from_user_id": group["aziza"],
+        "to_user_id": group["bobur"],
+        "amount": 1,
+    }
+    assert db_client.post(url, json=reverse, headers=aziza).status_code == 400
+
+
+def test_balances_and_settle_plan_endpoints(db_client, group, aziza, ramazon) -> None:
+    add_expense(db_client, group, aziza)
+
+    rows = db_client.get(f"/api/groups/{group['id']}/balances", headers=ramazon).json()
+    plan = db_client.get(
+        f"/api/groups/{group['id']}/settle-plan", headers=ramazon
+    ).json()
+
+    assert {r["user_id"]: r["balance"] for r in rows} == {
+        group["aziza"]: 200_000,
+        group["ramazon"]: -100_000,
+        group["bobur"]: -100_000,
+    }
+    assert sorted((t["from_user_id"], t["amount"]) for t in plan) == sorted(
+        [(group["ramazon"], 100_000), (group["bobur"], 100_000)]
+    )
+    assert all(t["to_user_id"] == group["aziza"] for t in plan)
+    outsider = auth_headers(db_client, "begona")
+    assert (
+        db_client.get(f"/api/groups/{group['id']}/settle-plan", headers=outsider)
+    ).status_code == 403
 
 
 # --- notifications -----------------------------------------------------------------
@@ -327,7 +389,11 @@ def test_participants_are_notified(db_client, group, aziza, ramazon) -> None:
     assert items[0]["is_read"] is False
 
 
-def test_settlement_notifies_the_other_party(db_client, group, aziza, ramazon) -> None:
+def test_settlement_notifies_the_receiver(db_client, group, aziza, ramazon) -> None:
+    """FR-21: the receiver gets the notification, also when the owner records it."""
+    add_expense(db_client, group, aziza)  # ramazon and bobur owe aziza
+    for name in ("aziza", "ramazon", "bobur"):
+        db_client.post("/api/notifications/read-all", headers=_headers(db_client, name))
     db_client.post(
         f"/api/groups/{group['id']}/settlements",
         json={
@@ -338,9 +404,12 @@ def test_settlement_notifies_the_other_party(db_client, group, aziza, ramazon) -
         headers=ramazon,
     )
 
-    items = db_client.get("/api/notifications", headers=aziza).json()
-    assert [("ramazon → aziza" in n["message"]) for n in items] == [True]
-    assert db_client.get("/api/notifications", headers=ramazon).json() == []
+    items = db_client.get("/api/notifications?unread_only=true", headers=aziza).json()
+    assert ["ramazon sizga 5 000 UZS" in n["message"] for n in items] == [True]
+    assert (
+        db_client.get("/api/notifications?unread_only=true", headers=ramazon).json()
+        == []
+    )
 
 
 def test_mark_read(db_client, group, aziza, ramazon) -> None:
@@ -350,12 +419,12 @@ def test_mark_read(db_client, group, aziza, ramazon) -> None:
 
     # someone else's notification looks missing
     assert (
-        db_client.post(f"/api/notifications/{first}/read", headers=aziza).status_code
+        db_client.patch(f"/api/notifications/{first}/read", headers=aziza).status_code
         == 404
     )
     assert (
-        db_client.post(f"/api/notifications/{first}/read", headers=ramazon)
-    ).status_code == 204
+        db_client.patch(f"/api/notifications/{first}/read", headers=ramazon)
+    ).json()["is_read"] is True
     unread = db_client.get(
         "/api/notifications?unread_only=true", headers=ramazon
     ).json()

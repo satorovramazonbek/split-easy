@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.api.dependencies import CurrentUser, NotificationServiceDep
@@ -55,12 +55,15 @@ def mark_all_read(
     return MarkedCount(marked=notifications.mark_all_read(user))
 
 
-@router.post("/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch("/{notification_id}/read", response_model=NotificationOut)
 def mark_read(
     notification_id: int, user: CurrentUser, notifications: NotificationServiceDep
-) -> Response:
+) -> NotificationOut:
+    """FR-23: only the owner can mark it; someone else's looks missing (404)."""
     try:
-        notifications.mark_read(user, notification_id)
+        n = notifications.mark_read(user, notification_id)
     except NotificationNotFoundError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(error)) from error
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return NotificationOut(
+        id=n.id, message=n.message, is_read=n.is_read, created_at=n.created_at
+    )
