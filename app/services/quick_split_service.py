@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from app.domain.balance import calculate_balances
 from app.domain.exceptions import InvalidSplitError
-from app.domain.models import Expense, SplitType
+from app.domain.models import Expense, ExpenseShare, SplitType
 from app.domain.settlement import Transfer, simplify_debts
 from app.domain.split_strategies import Participant
 from app.domain.split_strategy_factory import SplitStrategyFactory
@@ -53,6 +53,17 @@ def _normalize_value(
     return value
 
 
+def split_amount(
+    amount: int, split_type: str, participants: Sequence[Participant]
+) -> list[ExpenseShare]:
+    """Shares for ``amount`` with the chosen strategy (also used by group expenses)."""
+    normalized = [
+        Participant(p.user_id, _normalize_value(split_type, p.value))
+        for p in participants
+    ]
+    return SplitStrategyFactory.create(split_type).split(amount, normalized)
+
+
 class QuickSplitService:
     """Builds expenses and settlement plans for an anonymous, in-memory group."""
 
@@ -63,12 +74,7 @@ class QuickSplitService:
         if any(participant.user_id not in members for participant in data.participants):
             raise InvalidSplitError("Unknown participant in expense")
 
-        participants = [
-            Participant(p.user_id, _normalize_value(data.split_type, p.value))
-            for p in data.participants
-        ]
-        strategy = SplitStrategyFactory.create(data.split_type)
-        shares = strategy.split(data.amount, participants)
+        shares = split_amount(data.amount, data.split_type, data.participants)
         return Expense(
             id=None,
             group_id=QUICK_GROUP_ID,
