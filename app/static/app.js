@@ -1,7 +1,14 @@
-// SplitEasy — barcha ma'lumotlar faqat shu sahifa xotirasida saqlanadi.
-// Sahifa yangilansa, hammasi o'chadi (ro'yxatdan o'tish ham, baza ham yo'q).
+// SplitEasy — tezkor hisob.
+// Mehmon: ma'lumotlar faqat shu sahifa xotirasida, sahifa yangilansa o'chadi.
+// Kirgan foydalanuvchi: har bir o'zgarish /api/quick-split/draft orqali bazaga
+// saqlanadi va keyingi safar sahifa ochilganda qayta yuklanadi.
+// Mehmon ro'yxatdan o'tish yoki kirish sahifasiga o'tsa, kiritganlari
+// sessionStorage orqali yangi profilga ko'chiriladi (static/carry.js).
 (() => {
   "use strict";
+
+  const SIGNED_IN = document.currentScript?.dataset.signedIn === "1";
+  const CARRY_KEY = "spliteasy:guest-carry";
 
   const state = {
     participants: [], // {id, name}
@@ -413,6 +420,102 @@
     renderExpenseForm();
     renderExpenses();
     renderSummary();
+    scheduleSave();
+  }
+
+  // ---------- Saqlash (faqat kirgan foydalanuvchi) ----------
+  let loaded = !SIGNED_IN; // do not save before the saved state is loaded
+  let saveTimer = null;
+  let dirty = false;
+
+  function snapshot() {
+    return {
+      participants: state.participants.map(({ id, name }) => ({ id, name })),
+      expenses: state.expenses.map(({ id, description, amount, paid_by, split_type, participants, shares }) => ({
+        id, description, amount, paid_by, split_type, participants, shares,
+      })),
+    };
+  }
+
+  function setSaveStatus(text, cls = "") {
+    const box = $("saveStatus");
+    if (!box) return;
+    box.textContent = text;
+    box.className = `save-status ${cls}`.trim();
+  }
+
+  function scheduleSave() {
+    if (!SIGNED_IN || !loaded) return;
+    dirty = true;
+    clearTimeout(saveTimer);
+    setSaveStatus("Saqlanmoqda…", "saving");
+    saveTimer = setTimeout(saveNow, 500);
+  }
+
+  async function saveNow() {
+    clearTimeout(saveTimer);
+    if (!dirty) return;
+    dirty = false;
+    try {
+      const response = await fetch("/api/quick-split/draft", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snapshot()),
+      });
+      if (response.status === 401) {
+        setSaveStatus("Sessiya tugagan — saqlash uchun qayta kiring.", "error");
+        return;
+      }
+      if (!response.ok) throw new Error(String(response.status));
+      setSaveStatus("Saqlandi ✓ — profilingizda turibdi.");
+    } catch (error) {
+      dirty = true;
+      setSaveStatus("Saqlab bo'lmadi — internet aloqasini tekshiring.", "error");
+    }
+  }
+
+  function applyDraft(data) {
+    state.participants = (data.participants || []).map(({ id, name }) => ({ id, name }));
+    state.expenses = (data.expenses || []).map((e) => ({ ...e }));
+    state.nextParticipantId = Math.max(0, ...state.participants.map((p) => p.id)) + 1;
+    state.nextExpenseId = Math.max(0, ...state.expenses.map((e) => e.id)) + 1;
+  }
+
+  function readCarry() {
+    try {
+      const raw = sessionStorage.getItem(CARRY_KEY);
+      sessionStorage.removeItem(CARRY_KEY);
+      const data = raw ? JSON.parse(raw) : null;
+      return data && (data.participants?.length || data.expenses?.length) ? data : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function loadSaved() {
+    const carry = readCarry();
+    let saved;
+    try {
+      const response = await fetch("/api/quick-split/draft");
+      if (!response.ok) throw new Error(String(response.status));
+      saved = await response.json();
+    } catch (error) {
+      // Could not read the saved state: never overwrite it with an empty page.
+      setSaveStatus("Saqlangan hisobni yuklab bo'lmadi — sahifani yangilang.", "error");
+      return;
+    }
+    const hasSaved = saved.participants.length || saved.expenses.length;
+    loaded = true;
+    if (carry && (!hasSaved || confirm("Mehmon rejimida kiritgan hisobingiz topildi. Saqlangan hisob o'rniga shuni yuklaymi?"))) {
+      applyDraft(carry);
+      render(); // saves the carried state to the account
+      return;
+    }
+    applyDraft(saved);
+    loaded = false; // just loaded: nothing to save yet
+    render();
+    loaded = true;
+    setSaveStatus(hasSaved ? "Saqlangan hisobingiz yuklandi." : "Har bir o'zgarish profilingizga saqlanadi.");
   }
 
   $("participantForm").addEventListener("submit", addParticipant);
@@ -429,9 +532,35 @@
   $("calculateBtn").addEventListener("click", calculate);
   $("resetBtn").addEventListener("click", resetAll);
   $("copyBtn").addEventListener("click", copyResults);
-  window.addEventListener("beforeunload", (event) => {
-    if (state.participants.length || state.expenses.length) event.preventDefault();
-  });
-
-  render();
+  if (SIGNED_IN) {
+    // Last unsaved change: send it even while the page is closing.
+    window.addEventListener("pagehide", () => {
+      if (!dirty) return;
+      fetch("/api/quick-split/draft", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snapshot()),
+        keepalive: true,
+      });
+    });
+    render();
+    loadSaved();
+  } else {
+    // A guest's page is not kept on reload: drop what an earlier visit left.
+    try { sessionStorage.removeItem(CARRY_KEY); } catch (error) { /* storage off */ }
+    let leavingToSignIn = false;
+    for (const link of document.querySelectorAll('a[href^="/register"], a[href^="/login"]')) {
+      link.addEventListener("click", () => (leavingToSignIn = true));
+    }
+    window.addEventListener("beforeunload", (event) => {
+      if (leavingToSignIn) return; // the data goes to the new account
+      if (state.participants.length || state.expenses.length) event.preventDefault();
+    });
+    // Going to register / login: keep the page for the new account (carry.js).
+    window.addEventListener("pagehide", () => {
+      if (!leavingToSignIn || !(state.participants.length || state.expenses.length)) return;
+      try { sessionStorage.setItem(CARRY_KEY, JSON.stringify(snapshot())); } catch (error) { /* storage off */ }
+    });
+    render();
+  }
 })();

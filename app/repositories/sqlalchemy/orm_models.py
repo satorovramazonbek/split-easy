@@ -184,3 +184,21 @@ class NotificationORM(Base):
         Boolean, default=False, server_default=false()
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class QuickSplitDraftORM(Base):
+    """The signed-in user's quick split page (participants and expenses as JSON).
+
+    One row per user. The page is a scratchpad with free-form names, not group
+    members, so it is kept as a JSON document instead of rows in ``expenses``;
+    the service validates its structure before saving (migration 0006).
+    """
+
+    __tablename__ = "quick_split_drafts"
+    __table_args__ = (CheckConstraint("length(data) > 0", name="data_not_empty"),)
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    data: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

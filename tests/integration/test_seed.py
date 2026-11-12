@@ -63,7 +63,7 @@ def test_shares_add_up_to_expense_amount(seeded) -> None:
 
 
 def test_schema_is_at_head(seeded) -> None:
-    assert query(seeded[0], "SELECT version_num FROM alembic_version") == [("0005",)]
+    assert query(seeded[0], "SELECT version_num FROM alembic_version") == [("0006",)]
 
 
 def test_refuses_to_overwrite(seeded) -> None:

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% block title %}Bildirishnomalar{% endblock %}
+
+{% block hero %}
+<header class="container page-hero rise">
+  <a href="/groups" class="back-link">{{ icon('chevron-left', 'icon-sm') }} Guruhlarim</a>
+  <h1>Bildirishnomalar</h1>
+  <p class="lead-sm">Guruhlaringizdagi yangi xarajatlar va to'lovlar</p>
+</header>
+{% endblock %}
+
+{% block content %}
+<section class="card-se">
+  <div class="card-head">
+    <span class="head-icon">{{ icon('bell') }}</span>
+    <div><h2>Oxirgi 50 ta</h2><p class="sub">{{ notifications | selectattr('is_read', 'false') | list | length }} ta o'qilmagan</p></div>
+    {% if notifications | selectattr('is_read', 'false') | list %}
+    <div class="end">
+      <form method="post" action="/notifications/read-all">
+        <button type="submit" class="btn btn-sm btn-soft">{{ icon('check', 'icon-sm') }} Hammasini o'qildi deb belgilash</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  {% for n in notifications %}
+  <div class="notice-item {{ 'unread' if not n.is_read }}">
+    <span class="notice-dot" aria-hidden="true"></span>
+    <div class="grow">
+      <div class="msg">{{ n.message }}</div>
+      <div class="meta muted small">{{ n.created_at | human_date }}{{ ' · yangi' if not n.is_read }}</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="icon-wrap">{{ icon('bell') }}</div>
+    <p>Hali bildirishnoma yo'q. Guruhingizga xarajat qo'shilganda shu yerda ko'rinadi.</p>
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}

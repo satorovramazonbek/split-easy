@@ -25,7 +25,7 @@ def test_benchmark_compares_plans_without_and_with_indexes(tmp_path) -> None:
     with sqlite3.connect(db_path) as connection:  # left at head
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[
             0
-        ] == ("0005")
+        ] == ("0006")
 
     report = to_markdown(results, db_path)
     assert "| So'rov | Indekssiz (ms) | Indeks bilan (ms)" in report
