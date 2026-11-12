@@ -1,9 +1,10 @@
 """``ReportRepository`` backed by the raw SQL in ``report_queries.py``."""
 
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import date, datetime
 
-from sqlalchemy import text
+from sqlalchemy import RowMapping, text
 from sqlalchemy.orm import Session
 
 from app.repositories.interfaces.report_repository import (
@@ -37,7 +38,7 @@ class SqlAlchemyReportRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def _rows(self, sql: str, **params):
+    def _rows(self, sql: str, **params: object) -> Sequence[RowMapping]:
         return self._session.execute(text(sql), params).mappings().all()
 
     def member_balances(self, group_id: int) -> list[MemberBalance]:

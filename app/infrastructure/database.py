@@ -1,9 +1,11 @@
 """SQLAlchemy engine and session factory."""
 
+import sqlite3
 from collections.abc import Iterator
+from typing import Any
 
 from sqlalchemy import MetaData, create_engine, event
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.infrastructure.config import settings
@@ -25,14 +27,14 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-def make_engine(url: str, **kwargs) -> Engine:
+def make_engine(url: str, **kwargs: Any) -> Engine:
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
     engine = create_engine(url, connect_args=connect_args, **kwargs)
 
     if url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")
-        def _on_connect(dbapi_connection, _record) -> None:
+        def _on_connect(dbapi_connection: sqlite3.Connection, _record: object) -> None:
             # The sqlite3 driver delays BEGIN until the first INSERT/UPDATE. If a
             # transaction starts with SAVEPOINT (session.begin_nested()), SQLite
             # then treats the savepoint as the whole transaction and RELEASE
@@ -46,7 +48,7 @@ def make_engine(url: str, **kwargs) -> Engine:
             cursor.close()
 
         @event.listens_for(engine, "begin")
-        def _on_begin(connection) -> None:
+        def _on_begin(connection: Connection) -> None:
             connection.exec_driver_sql("BEGIN")
 
     return engine

@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -77,6 +77,6 @@ class SqlAlchemyUserRepository:
     def get_by_email(self, email: str) -> User | None:
         return self._one(select(UserORM).where(UserORM.email == email))
 
-    def _one(self, statement) -> User | None:
+    def _one(self, statement: Select[tuple[UserORM]]) -> User | None:
         row = self._session.scalars(statement).first()
         return _to_domain(row) if row else None
