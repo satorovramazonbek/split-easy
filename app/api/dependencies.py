@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -11,14 +11,30 @@ from app.infrastructure.config import settings
 from app.infrastructure.database import get_session
 from app.infrastructure.security import Argon2PasswordHasher, JwtTokenService
 from app.repositories.sqlalchemy.group_repository import SqlAlchemyGroupRepository
+from app.repositories.sqlalchemy.notification_repository import (
+    SqlAlchemyNotificationRepository,
+)
+from app.repositories.sqlalchemy.quick_split_draft_repository import (
+    SqlAlchemyQuickSplitDraftRepository,
+)
 from app.repositories.sqlalchemy.report_repository import SqlAlchemyReportRepository
 from app.repositories.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from app.repositories.sqlalchemy.user_repository import SqlAlchemyUserRepository
 from app.services.auth_service import AuthService, InvalidCredentialsError
+from app.services.expense_service import ExpenseService
 from app.services.group_service import GroupService
+from app.services.notification_service import NotificationService
+from app.services.quick_split_draft_service import QuickSplitDraftService
 from app.services.report_service import ReportService
 
+# The web pages keep the JWT in this HttpOnly cookie (see app/web/pages.py).
+COOKIE_NAME = "spliteasy_token"
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login", auto_error=False
+)
 
 password_hasher = Argon2PasswordHasher()
 token_service = JwtTokenService(settings.secret_key, settings.access_token_minutes)
@@ -51,6 +67,41 @@ def get_current_user(
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+def get_page_or_api_user(
+    request: Request,
+    auth: AuthServiceDep,
+    token: Annotated[str | None, Depends(optional_oauth2_scheme)],
+) -> User:
+    """Bearer token (API clients) or the login cookie (JavaScript on our pages).
+
+    With the cookie, a write must be sent as JSON: a form on another site
+    cannot set ``Content-Type: application/json`` without a CORS preflight,
+    which this app does not allow, so the cookie cannot be abused (CSRF).
+    """
+    if token is None:
+        token = request.cookies.get(COOKIE_NAME)
+        content_type = request.headers.get("content-type", "")
+        if (
+            token
+            and request.method not in SAFE_METHODS
+            and not content_type.startswith("application/json")
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="JSON kutilgan",
+            )
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return get_current_user(token, auth)
+
+
+PageOrApiUser = Annotated[User, Depends(get_page_or_api_user)]
+
+
 def get_group_service(session: SessionDep) -> GroupService:
     # FastAPI caches ``get_session`` per request, so auth and groups share
     # one session and one transaction.
@@ -77,3 +128,26 @@ def get_unit_of_work(session: SessionDep) -> SqlAlchemyUnitOfWork:
 
 
 UnitOfWorkDep = Annotated[SqlAlchemyUnitOfWork, Depends(get_unit_of_work)]
+
+
+def get_expense_service(session: SessionDep) -> ExpenseService:
+    return ExpenseService(SqlAlchemyUnitOfWork(session))
+
+
+ExpenseServiceDep = Annotated[ExpenseService, Depends(get_expense_service)]
+
+
+def get_notification_service(session: SessionDep) -> NotificationService:
+    return NotificationService(SqlAlchemyNotificationRepository(session))
+
+
+NotificationServiceDep = Annotated[
+    NotificationService, Depends(get_notification_service)
+]
+
+
+def get_draft_service(session: SessionDep) -> QuickSplitDraftService:
+    return QuickSplitDraftService(SqlAlchemyQuickSplitDraftRepository(session))
+
+
+DraftServiceDep = Annotated[QuickSplitDraftService, Depends(get_draft_service)]
