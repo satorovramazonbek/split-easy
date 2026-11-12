@@ -155,62 +155,45 @@ Service qatlami ma'lumotlar bazasining aniq implementatsiyasiga emas, Repository
 
 ## 4. Loyiha papkalari tuzilishi
 
-Loyiha quyidagi papka va fayllar asosida tashkil qilinadi:
-
 ```text
 split-easy/
-│
-├── app/
-│   ├── api/
-│   │   ├── routes/
-│   │   └── dependencies.py
-│   │
-│   ├── domain/
-│   │   ├── models/
-│   │   ├── strategies/
-│   │   ├── money.py
-│   │   ├── balance.py
-│   │   └── settlement.py
-│   │
-│   ├── services/
-│   │   ├── auth_service.py
-│   │   ├── group_service.py
-│   │   ├── expense_service.py
-│   │   └── settlement_service.py
-│   │
-│   ├── repositories/
-│   │   ├── interfaces/
-│   │   └── sqlalchemy/
-│   │
-│   ├── infrastructure/
-│   │   ├── database.py
-│   │   └── security.py
-│   │
-│   ├── templates/
-│   ├── static/
-│   └── main.py
-│
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── conftest.py
-│
-├── migrations/
-├── docs/
 ├── .github/
-│   └── workflows/
-│       └── ci.yml
-│
-├── .env.example
-├── .gitignore
-├── alembic.ini
-├── pyproject.toml
-├── poetry.lock
-├── README.md
-└── DESIGN.md
+│   ├── workflows/ci.yml          # ruff, black, pytest --cov-fail-under=80
+│   ├── pull_request_template.md  # PR tavsifi shabloni (nima, nega, qanday test qilindi)
+│   └── ISSUE_TEMPLATE/           # feature / bug shablonlari
+├── app/
+│   ├── domain/                   # sof Python (FastAPI/SQLAlchemy importi yo'q)
+│   │   ├── models.py             # User, Group, Expense, ExpenseShare, Settlement, Notification
+│   │   ├── money.py              # butun so'mda bo'lish, qoldiqni taqsimlash
+│   │   ├── split_strategies.py   # Strategy: SplitStrategy + 4 ta implementatsiya
+│   │   ├── split_strategy_factory.py  # Factory: SplitStrategyFactory, split_amount()
+│   │   ├── balance.py            # sof balans (FR-16)
+│   │   ├── settlement.py         # greedy hisob-kitob rejasi (FR-17)
+│   │   └── events.py             # Observer: ExpenseAdded, SettlementRecorded, EventBus
+│   ├── services/                 # biznes jarayonlari (faqat interfeyslarga bog'liq)
+│   │   ├── auth_service.py, group_service.py
+│   │   ├── expense_service.py    # xarajat: qo'shish, ro'yxat, tahrirlash, o'chirish
+│   │   ├── settlement_service.py # balans, reja, to'lov
+│   │   ├── notifiers.py          # Observer kuzatuvchilari: InAppNotifier, EmailNotifier
+│   │   ├── notification_service.py, export_service.py, report_service.py
+│   │   └── quick_split_service.py, quick_split_draft_service.py, messages.py
+│   ├── repositories/
+│   │   ├── interfaces/           # Protocol'lar: UserRepository, ExpenseReader/Writer, ...
+│   │   ├── sqlalchemy/           # 1-implementatsiya: ORM, xom SQL hisobotlar, UnitOfWork
+│   │   └── in_memory.py          # 2-implementatsiya: testlar uchun (dict'larda)
+│   ├── exporters/                # Factory: ExporterFactory, CsvExporter, JsonExporter
+│   ├── infrastructure/           # sozlamalar, baza ulanishi, argon2/JWT, FakeEmailSender
+│   ├── api/                      # JSON routerlar (/api/...) va dependencies.py (DI)
+│   ├── web/                      # HTML sahifalar: auth, group, expense, notification
+│   ├── templates/, static/
+│   └── main.py
+├── migrations/                   # Alembic 0001–0007
+├── scripts/                      # seed.py, benchmark.py, draw_erd.py
+├── docs/                         # DB.md, erd.png, schema.sql, benchmark.md, TZ
+└── tests/
+    ├── unit/                     # domain + servislar (In-Memory repo va Mock bilan)
+    └── integration/              # API, sahifalar, baza, SQL, repository kontraktlari
 ```
-
-Loyiha rivojlanishi davomida zaruratga qarab qo‘shimcha papka va fayllar kiritilishi mumkin.
 
 ## 5. Domen modeli
 
@@ -420,59 +403,107 @@ Natijada qarzdorliklarni yopish uchun qulay to‘lov rejasi shakllantiriladi.
 
 ## 10. Loyihada foydalaniladigan loyihalash naqshlari
 
-### 10.1. Strategy Pattern
+Har bir pattern uchun: qaysi muammoni hal qiladi, nega aynan shu yerda va patternsiz kod
+qanday bo'lardi (TZ, 8-bo'lim).
 
-Xarajatlarni turli usullarda taqsimlash algoritmlarini amalga oshirish uchun foydalaniladi.
+### 10.1. Strategy — xarajatni bo'lish usullari
 
-### 10.2. Repository Pattern
+- **Qayerda:** `app/domain/split_strategies.py` — `SplitStrategy` (abstrakt klass) va
+  `EqualSplitStrategy`, `ExactSplitStrategy`, `PercentageSplitStrategy`,
+  `SharesSplitStrategy`.
+- **Muammo:** to'rt xil bo'lish qoidasi bor, har birining o'z tekshiruvi (foizlar = 100,
+  aniq summalar = umumiy summa) va hammasi uchun bitta umumiy yaxlitlash qoidasi.
+- **Nega shu yerda:** servis faqat `strategy.split(total, participants)` ni chaqiradi va
+  qaysi usul ekanini bilmaydi. Umumiy qadamlar (summa musbat, ishtirokchilar takrorlanmaydi,
+  yig'indi = summa) bazaviy klassda bir marta yozilgan, har bir usul faqat `_calculate` ni
+  yozadi.
+- **Patternsiz:** `ExpenseService` ichida `if split_type == "equal": ... elif "exact": ...`
+  zanjiri bo'lardi. Yangi usul qo'shish uchun servisni o'zgartirish kerak bo'lardi va har bir
+  tarmoqni alohida test qilib bo'lmasdi.
 
-Ma'lumotlar bazasi bilan ishlash qismini biznes mantiqidan ajratish uchun foydalaniladi.
+### 10.2. Factory — strategiya va eksportyorni nomi bo'yicha yaratish
 
-### 10.3. Observer Pattern / Event Bus
+- **Qayerda:** `SplitStrategyFactory.create("percentage")`
+  (`app/domain/split_strategy_factory.py`) va `ExporterFactory.create("csv")`
+  (`app/exporters/factory.py`).
+- **Muammo:** foydalanuvchi usul yoki formatni **matn** ko'rinishida yuboradi (`"shares"`,
+  `?format=json`), kod esa konkret klassni bilishi kerak.
+- **Nega shu yerda:** nom → klass moslash bitta registrda (`_registry`) turadi. Yangi format
+  — bitta klass va `ExporterFactory.register("xlsx", XlsxExporter)`; servis ham, API ham
+  o'zgarmaydi (FR-25). Buni `tests/unit/test_exporters.py` dagi
+  `test_new_format_is_added_without_changing_existing_code` testi ko'rsatadi.
+- **Patternsiz:** API routerida `if format == "csv": CsvExporter() elif ...` — har yangi
+  formatda router, servis va testlar o'zgaradi.
 
-Tizimda sodir bo‘ladigan muhim hodisalar haqida foydalanuvchilarni xabardor qilish uchun ishlatiladi.
+### 10.3. Repository — bazaga kirishni ajratish
 
-Misollar:
+- **Qayerda:** interfeyslar `app/repositories/interfaces/` (Protocol): `UserRepository`,
+  `GroupRepository`, `ExpenseRepository` (= `ExpenseReader` + `ExpenseWriter`),
+  `SettlementRepository`, `NotificationRepository`, `ReportRepository` (+ `BalanceReader`).
+  **Ikki implementatsiya:** `app/repositories/sqlalchemy/` va `app/repositories/in_memory.py`.
+- **Muammo:** biznes qoidalari (kim xarajat qo'sha oladi, balans 0 bo'lsa chiqarish) bazaga
+  bog'liq bo'lmasligi va bazasiz test qilinishi kerak (NFR-4).
+- **Nega shu yerda:** servislar konstruktorda interfeysni oladi. Ishlab chiqarishda SQLAlchemy,
+  unit testlarda In-Memory beriladi (`tests/unit/test_expense_service.py`). Ikkalasi bir xil
+  kontraktga amal qilishini `tests/integration/test_repository_contracts.py` tekshiradi
+  (har bir test ikki marta ishlaydi).
+- **Patternsiz:** servislar ichida `session.query(...)` bo'lardi — har bir servis testiga
+  baza kerak bo'lardi va SQL o'zgarsa, biznes kodi ham o'zgarardi.
 
-- ExpenseCreated — yangi xarajat yaratildi.
-- MemberAdded — guruhga yangi a'zo qo‘shildi.
-- SettlementCompleted — hisob-kitob yakunlandi.
+### 10.4. Observer (Event Bus) — bildirishnomalar
 
-### 10.4. Factory Pattern
+- **Qayerda:** hodisalar va `EventBus` — `app/domain/events.py` (`ExpenseAdded`,
+  `SettlementRecorded`). Kuzatuvchilar — `app/services/notifiers.py` (`InAppNotifier`,
+  `EmailNotifier`, umumiy `Notifier` interfeysi). Ulash — `app/api/dependencies.py`,
+  `get_event_bus()`.
+- **Muammo:** xarajat yoki to'lov saqlanganda bir nechta ish bajarilishi kerak: ilova ichida
+  bildirishnoma (FR-20, FR-21), email (FR-22), kelajakda SMS yoki Telegram. TZ talabi:
+  **`ExpenseService` bildirishnoma klasslarini bilmasligi kerak.**
+- **Nega shu yerda:** servis faqat `self._events.publish(ExpenseAdded(...))` deydi. Kim
+  tinglayotganini bilmaydi. Yangi kanal — yangi klass va `register_notifier(bus, ...)`
+  qatori; servis o'zgarmaydi. Testda bus o'rniga `Mock()` beriladi va hodisa yuborilgani
+  tekshiriladi (`test_adding_expense_publishes_expense_added_event`).
+- **Tranzaksiya:** hodisa `uow.commit()` dan **oldin**, Unit of Work ichida e'lon qilinadi.
+  `InAppNotifier` so'rovning sessiyasidan foydalanadi, shuning uchun xarajat, ulushlar va
+  bildirishnomalar bitta tranzaksiyada saqlanadi (TZ 10.4). Bildirishnoma yozilmasa, xarajat
+  ham saqlanmaydi (`test_expense_and_notifications_are_saved_together`).
+- **Patternsiz:** `ExpenseService` `NotificationRepository` va `EmailSender` ni bevosita
+  chaqirardi: uchta vazifa bitta klassda (SRP buzilishi) va har yangi kanal uchun servis
+  o'zgarardi (OCP buzilishi).
 
-Tanlangan taqsimlash turiga mos strategiya obyektini yaratish uchun foydalaniladi.
+### 10.5. Unit of Work — tranzaksiya chegarasi servisda (bonus)
 
-### 10.5. Adapter va Decorator Pattern
+- **Qayerda:** `app/repositories/interfaces/unit_of_work.py`,
+  `app/repositories/sqlalchemy/unit_of_work.py`, `InMemoryUnitOfWork`.
+- **Muammo:** xarajat va uning barcha ulushlari, tahrirlashda eski ulushlarni o'chirish va
+  yangilarini yozish, to'lov va bildirishnoma — yo hammasi saqlanadi, yo hech narsa.
+- **Nega shu yerda:** qaysi yozuvlar bir butun ekanini faqat servis biladi:
+  `with uow: ... uow.commit()`. `commit()` siz yoki xato bilan chiqilsa — rollback.
 
-Zarur holatlarda qo‘shimcha imkoniyatlarni kengaytirish va mavjud komponentlarni moslashtirish uchun qo‘llanilishi mumkin.
+### 10.6. Adapter va Decorator (bonus, qo'llanilmagan)
+
+Valyuta kursi API'si (Adapter) va loglovchi/keshlovchi wrapper (Decorator) TZ'da bonus.
+Loyihada tashqi valyuta xizmati yo'q, shuning uchun "chiroyli ko'rinishi uchun" pattern
+qo'shilmadi (TZ, 19-bo'lim: "Patternni majburan qo'llamang").
 
 ## 11. SOLID tamoyillari
 
-Loyiha SOLID tamoyillari asosida ishlab chiqiladi.
+| Tamoyil | Loyihadagi aniq misol (fayl → klass) | Qanday amal qilinadi |
+|---|---|---|
+| **S** — Single Responsibility | `app/services/expense_service.py` → `ExpenseService`; `settlement_service.py` → `SettlementService`; `notifiers.py` → `InAppNotifier`, `EmailNotifier`; `export_service.py` → `ExportService`; `auth_service.py` → `AuthService` | `ExpenseService` faqat xarajat qoidalarini biladi. To'lov, bildirishnoma, eksport va autentifikatsiya alohida klasslarda. Veb qatlami ham mavzular bo'yicha bo'lingan: `app/web/auth_pages.py`, `group_pages.py`, `expense_pages.py`, `notification_pages.py` |
+| **O** — Open/Closed | `app/domain/split_strategy_factory.py` → `SplitStrategyFactory.register()`; `app/exporters/factory.py` → `ExporterFactory.register()`; `app/domain/events.py` → `EventBus.subscribe()` | Yangi bo'lish usuli, eksport formati yoki bildirishnoma kanali — yangi klass va bitta ro'yxatdan o'tkazish qatori. Mavjud kod o'zgarmaydi |
+| **L** — Liskov Substitution | `SplitStrategy` ning 4 ta implementatsiyasi; `SqlAlchemy*Repository` ↔ `InMemory*Repository` (`app/repositories/in_memory.py`) | Har qanday strategiya bir xil kontraktga amal qiladi: ulushlar yig'indisi = summa. Repository'lar uchun `tests/integration/test_repository_contracts.py` bir xil testlarni ikkala implementatsiyada ishlatadi |
+| **I** — Interface Segregation | `app/repositories/interfaces/expense_repository.py` → `ExpenseReader`, `ExpenseWriter`; `report_repository.py` → `BalanceReader` ⊂ `ReportRepository`; `app/services/notifiers.py` → `Notifier`, `EmailSender`; `app/domain/events.py` → `EventPublisher` | `GroupService` va `SettlementService` butun hisobotlar interfeysini emas, faqat `BalanceReader.member_balances()` ni oladi. Servisga butun `EventBus` emas, faqat `publish()` li `EventPublisher` kerak |
+| **D** — Dependency Inversion | `ExpenseService(uow: UnitOfWork, events: EventPublisher)`; `SettlementService(uow, balances: BalanceReader, events)`; `GroupService(groups, users, balances)`; `EmailNotifier(sender: EmailSender, users)` | Servislar abstraksiyalarni konstruktor orqali oladi va o'zi yaratmaydi. Konkret klasslar faqat bitta joyda — `app/api/dependencies.py` (composition root) — ulanadi. Testlar o'sha konstruktorlarga In-Memory repo va `Mock` beradi |
 
-**S — Single Responsibility Principle (Yagona mas'uliyat tamoyili)**
+### 11.1. Texnik topshiriqdan ongli chetlanishlar
 
-Har bir sinf faqat bitta asosiy vazifani bajarishi kerak.
-
-Misol: ExpenseService xarajatlar bilan bog‘liq amaliy jarayonlarni boshqaradi, BalanceCalculator esa balanslarni hisoblaydi.
-
-**O — Open/Closed Principle (Ochiqlik va yopiqlik tamoyili)**
-
-Tizim yangi imkoniyatlarni qo‘shishga ochiq, mavjud kodni o‘zgartirishga esa imkon qadar yopiq bo‘lishi kerak.
-
-Misol: yangi taqsimlash strategiyasini qo‘shishda mavjud strategiyalar kodini o‘zgartirish talab qilinmasligi kerak.
-
-**L — Liskov Substitution Principle (O‘rin almashtirish tamoyili)**
-
-Umumiy interfeysni amalga oshirgan barcha strategiyalar bir-birining o‘rnida ishlay olishi kerak.
-
-**I — Interface Segregation Principle (Interfeyslarni ajratish tamoyili)**
-
-Sinf o‘zi foydalanmaydigan ortiqcha metodlarni amalga oshirishga majbur bo‘lmasligi kerak.
-
-**D — Dependency Inversion Principle (Bog‘liqliklarni teskari yo‘naltirish tamoyili)**
-
-Yuqori darajadagi modullar aniq implementatsiyalarga emas, abstraksiyalarga bog‘lanishi kerak.
+| TZ | Loyihada | Sabab |
+|---|---|---|
+| 3-bo'lim: Mehmon "faqat ro'yxatdan o'tish va kirish sahifalarini ko'ra oladi" | Mehmon **Tezkor hisob** sahifasidan foydalana oladi: ma'lumotlar faqat brauzer xotirasida turadi va hech narsa saqlanmaydi (tepada ogohlantirish chiqadi) | Mahsulot qarori: foydalanuvchi ilovani ro'yxatdan o'tmasdan sinab ko'radi. Ro'yxatdan o'tgach, kiritgan hisobi profilga ko'chiriladi. Guruhlar, xarajatlar va hisobotlarga mehmon kira olmaydi — avtorizatsiya qoidasi (NFR-1) o'zgarmagan |
+| FR-7: "faqat balansi 0 bo'lsa" chiqarish | Balans 0 bo'lmasa — 409. Balans 0 va tarixi bor a'zo `group_members.left_at` bilan "chiqib ketgan" deb belgilanadi (migratsiya `0007`), tarixi yo'q a'zo o'chiriladi | Xarajat va to'lovlar a'zolik qatoriga FK (`ON DELETE RESTRICT`) bilan bog'langan: tarix yo'qolmasligi uchun qator saqlanadi |
+| 11-bo'lim: `/auth/...`, `/groups/...` | Hamma JSON yo'llar `/api/` prefiksi bilan | HTML sahifalar (`/groups`, `/login`) bilan to'qnashmasligi uchun |
+| FR-18: to'lov | To'lov summasi qarzdan oshmasligi kerak | "To'landi" tugmasini ikki marta bosish qarzni kreditga aylantirib yubormasligi uchun |
 
 ## 12. Ma'lumotlar bazasi
 
@@ -531,9 +562,14 @@ Quyidagi qismlar birgalikda tekshiriladi:
 - Repository implementatsiyalari.
 - Tranzaksiyalar.
 
-### Mocking
+### Mocking va Fake
 
-Tashqi bog‘liqliklarni mustaqil tekshirish uchun zarur joylarda Mock obyektlardan foydalaniladi.
+- Servis testlari In-Memory repository'lar bilan ishlaydi (`app/repositories/in_memory.py`):
+  baza ham, veb-freymvork ham kerak emas (NFR-4).
+- `unittest.mock.Mock` hodisa yuboruvchi (`EventPublisher`) va email yuboruvchi
+  (`EmailSender`) o'rnida ishlatiladi: `ExpenseAdded` yuborilgani va kuzatuvchi chaqirilgani
+  tekshiriladi (`tests/unit/test_expense_service.py`, `test_notifiers.py`, `test_events.py`).
+- Haqiqiy email yuborilmaydi: `FakeEmailSender` xatlarni faqat logga yozadi (FR-22).
 
 **Test qamrovi talabi:** Domain va Service qatlamlari uchun kamida 80% test qamroviga erishish.
 
