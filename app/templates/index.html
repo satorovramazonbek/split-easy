@@ -8,14 +8,18 @@
 {% block hero %}
 <header class="container hero-grid">
   <div class="rise">
-    <span class="pill pill-glass">{{ icon('sparkles', 'icon-sm') }} Ro'yxatdan o'tmasdan · bepul</span>
+    <span class="pill pill-glass">{{ icon('sparkles', 'icon-sm') }} {% if user %}Hisobingiz avtomatik saqlanadi{% else %}Ro'yxatdan o'tmasdan · bepul{% endif %}</span>
     <h1 class="hero-title">Kim kimga qancha qarz —<br><span class="accent">bir zumda.</span></h1>
     <p class="hero-lead">Sayohat, ijara yoki do'stlar bilan kechki ovqat: xarajatlarni kiriting, SplitEasy eng kam o'tkazma bilan hisob-kitob qilib beradi.</p>
     <div class="hero-actions">
       <a href="#start" class="btn btn-lg btn-white">{{ icon('calculator') }} Hisoblashni boshlash</a>
       {% if not user %}<a href="/register" class="btn btn-lg btn-light-glass">Guruh yaratish {{ icon('arrow-right') }}</a>{% endif %}
     </div>
-    <p class="hero-note">{{ icon('triangle-alert', 'icon-sm') }} Bu sahifadagi ma'lumotlar saqlanmaydi — sahifa yangilansa o'chib ketadi.</p>
+    {% if user %}
+    <p class="hero-note">{{ icon('save', 'icon-sm') }} <span id="saveStatus" class="save-status">Har bir o'zgarish profilingizga saqlanadi.</span></p>
+    {% else %}
+    <p class="hero-note">{{ icon('triangle-alert', 'icon-sm') }} <span>Mehmon rejimi: ma'lumotlar saqlanmaydi — sahifa yangilansa o'chib ketadi. <a href="/register" class="text-white fw-semibold">Ro'yxatdan o'tsangiz</a>, hisobingiz profilingizga ko'chiriladi.</span></p>
+    {% endif %}
   </div>
 
   <div class="demo-wrap rise" aria-hidden="true" style="animation-delay: .1s">
@@ -154,6 +158,6 @@
 </section>
 {% endblock %}
 
-{% block footer %}SplitEasy · ro'yxatdan o'tishsiz, bazasiz · ma'lumotlar faqat brauzer xotirasida{% if not user %} · <a href="/login">Guruhlarni saqlash uchun kiring</a>{% endif %}{% endblock %}
+{% block footer %}{% if user %}SplitEasy · tezkor hisob profilingizga saqlanadi{% else %}SplitEasy · mehmon rejimi: ma'lumotlar faqat brauzer xotirasida · <a href="/login">Saqlash uchun kiring</a>{% endif %}{% endblock %}
 
-{% block scripts %}<script src="{{ url_for('static', path='app.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='app.js') }}" data-signed-in="{{ '1' if user else '0' }}"></script>{% endblock %}

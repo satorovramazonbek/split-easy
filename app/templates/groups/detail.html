@@ -40,12 +40,84 @@
 
 {% block content %}
 {% set cur = group.currency %}
+{% set f = expense_form %}
+{% set f_split = f.split_type or 'equal' %}
 <div class="row g-4">
   <div class="col-lg-7">
+    <section class="card-se" id="add-expense">
+      <div class="card-head">
+        <span class="head-icon">{{ icon('receipt') }}</span>
+        <div><h2>Xarajat qo'shish</h2><p class="sub">Bazaga saqlanadi, balanslar darhol yangilanadi</p></div>
+      </div>
+      {% if expense_error %}
+      <div class="alert alert-danger py-2" role="alert">{{ icon('triangle-alert', 'icon-sm') }} {{ expense_error }}</div>
+      {% endif %}
+      <form method="post" action="/groups/{{ group.id }}/expenses" class="expense-form" id="groupExpenseForm" autocomplete="off">
+        <div class="row g-3">
+          <div class="col-md-7">
+            <label for="ge-description" class="form-label">Tavsif</label>
+            <input type="text" id="ge-description" name="description" class="form-control" placeholder="Masalan: Ovqat, Taksi" maxlength="200" value="{{ f.description or '' }}" required>
+          </div>
+          <div class="col-md-5">
+            <label for="ge-amount" class="form-label">Summa ({{ cur }})</label>
+            <input type="number" id="ge-amount" name="amount" class="form-control" placeholder="0" min="1" step="1" inputmode="numeric" value="{{ f.amount or '' }}" required>
+          </div>
+          <div class="col-md-6">
+            <label for="ge-paid-by" class="form-label">Kim to'ladi</label>
+            <select id="ge-paid-by" name="paid_by" class="form-select" required>
+              {% for m in members %}
+              <option value="{{ m.user_id }}" {{ 'selected' if (f.paid_by or user.id) == m.user_id }}>{{ m.username }}{{ ' (siz)' if m.user_id == user.id }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label for="ge-split" class="form-label">Bo'lish usuli</label>
+            <select id="ge-split" name="split_type" class="form-select">
+              {% for value, label in split_types %}
+              <option value="{{ value }}" {{ 'selected' if f_split == value }}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label for="ge-category" class="form-label">Kategoriya</label>
+            <select id="ge-category" name="category" class="form-select">
+              {% for c in categories_choice %}
+              <option value="{{ c }}" {{ 'selected' if (f.category or 'other') == c }}>{{ c | category }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label for="ge-date" class="form-label">Sana</label>
+            <input type="date" id="ge-date" name="expense_date" class="form-control" value="{{ f.expense_date or today }}" max="{{ today }}">
+          </div>
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="form-label mb-0">Kimlar o'rtasida bo'linadi</span>
+              <button type="button" id="ge-toggle-all" class="btn btn-sm btn-soft">{{ icon('check', 'icon-sm') }} Hammasi</button>
+            </div>
+            <div class="share-list">
+              {% for m in members %}
+              {% set checked = (m.user_id in f.participants) if f.participants is defined else true %}
+              <div class="share-row">
+                <input type="checkbox" class="form-check-input m-0" id="ge-p-{{ m.user_id }}" name="participants" value="{{ m.user_id }}" {{ 'checked' if checked }}>
+                {{ avatar(m.username, 'avatar-sm') }}
+                <label for="ge-p-{{ m.user_id }}">{{ m.username }}</label>
+                <input type="number" class="form-control form-control-sm" name="value_{{ m.user_id }}" min="0" step="any"
+                       aria-label="{{ m.username }} uchun qiymat" value="{{ f.share_values.get(m.user_id, '') if f.share_values is defined else '' }}" {{ 'hidden' if f_split == 'equal' }}>
+              </div>
+              {% endfor %}
+            </div>
+            <div id="ge-hint" class="form-text mt-2"></div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary mt-3">{{ icon('plus') }} Xarajatni saqlash</button>
+      </form>
+    </section>
+
     <section class="card-se">
       <div class="card-head">
         <span class="head-icon">{{ icon('hand-coins') }}</span>
-        <div><h2>Hisob-kitob rejasi</h2><p class="sub">Hammani nolga keltiradigan eng kam o'tkazmalar</p></div>
+        <div><h2>Hisob-kitob rejasi</h2><p class="sub">Hammani nolga keltiradigan eng kam o'tkazmalar. To'langanini belgilang.</p></div>
       </div>
       <ul class="transfers">
         {% for t in transfers %}
@@ -53,6 +125,15 @@
           <div class="who">{{ avatar(names[t.from_user_id], 'avatar-sm') }}<span>{{ names[t.from_user_id] }}</span></div>
           <div class="flow"><span class="money">{{ t.amount | money(cur) }}</span><span class="line">{{ icon('arrow-right', 'icon-sm') }}</span></div>
           <div class="who to"><span>{{ names[t.to_user_id] }}</span>{{ avatar(names[t.to_user_id], 'avatar-sm') }}</div>
+          {% if can_settle(t) %}
+          <form method="post" action="/groups/{{ group.id }}/settlements" class="settle-form"
+                onsubmit="return confirm('{{ names[t.from_user_id] }} → {{ names[t.to_user_id] }}: {{ t.amount | money(cur) }} to\'landi deb belgilansinmi?');">
+            <input type="hidden" name="from_user_id" value="{{ t.from_user_id }}">
+            <input type="hidden" name="to_user_id" value="{{ t.to_user_id }}">
+            <input type="hidden" name="amount" value="{{ t.amount }}">
+            <button type="submit" class="btn btn-sm btn-soft">{{ icon('check', 'icon-sm') }} To'landi</button>
+          </form>
+          {% endif %}
         </li>
         {% else %}
         <li class="settled">{{ icon('check') }} Hamma hisob teng — hech kim qarzdor emas</li>
@@ -83,7 +164,7 @@
   </div>
 
   <div class="col-lg-5">
-    <section class="card-se h-100">
+    <section class="card-se">
       <div class="card-head">
         <span class="head-icon violet">{{ icon('users') }}</span>
         <div><h2>A'zolar</h2><p class="sub">{{ members | length }} kishi</p></div>
@@ -120,8 +201,66 @@
       <p class="muted small mb-0">A'zolarni faqat guruh egasi qo'sha oladi.</p>
       {% endif %}
     </section>
+
+    <section class="card-se mt-4">
+      <div class="card-head">
+        <span class="head-icon sky">{{ icon('wallet') }}</span>
+        <div><h2>To'lovlar tarixi</h2><p class="sub">Belgilangan to'lovlar (oxirgi 20 ta)</p></div>
+      </div>
+      {% for st in settlements %}
+      <div class="row-item">
+        {{ avatar(names.get(st.from_user_id, '?'), 'avatar-sm') }}
+        <div class="grow">
+          <div class="title">{{ names.get(st.from_user_id, '?') }} → {{ names.get(st.to_user_id, '?') }}</div>
+          <div class="meta">{{ st.created_at | human_date }}</div>
+        </div>
+        <div class="money pos">{{ st.amount | money(cur) }}</div>
+      </div>
+      {% else %}
+      <p class="muted small mb-0">Hali to'lov belgilanmagan.</p>
+      {% endfor %}
+    </section>
   </div>
 </div>
+
+<section class="card-se mt-4" id="expenses">
+  <div class="card-head">
+    <span class="head-icon violet">{{ icon('receipt') }}</span>
+    <div><h2>Xarajatlar</h2><p class="sub">{{ expense_total }} ta xarajat, yangilari birinchi</p></div>
+  </div>
+  {% for e in expenses %}
+  <div class="expense-item">
+    <div class="ex-icon">{{ icon('receipt') }}</div>
+    <div class="grow">
+      <div class="fw-semibold">{{ e.description }}</div>
+      <div class="meta">{{ names.get(e.paid_by, '?') }} to'ladi · {{ e.category.value | category }} · {{ e.expense_date | human_date }}</div>
+      {% set shares_text %}{% for sh in e.shares %}{{ names.get(sh.user_id, '?') }}: {{ sh.share_amount | money(cur) }}{{ ' · ' if not loop.last }}{% endfor %}{% endset %}
+      <div class="shares-line" title="{{ shares_text }}">{{ shares_text }}</div>
+    </div>
+    <div class="end">
+      <span class="amount">{{ e.amount | money(cur) }}</span>
+      {% if is_owner or e.created_by == user.id %}
+      <form method="post" action="/groups/{{ group.id }}/expenses/{{ e.id }}/delete" class="settle-form"
+            onsubmit="return confirm('Bu xarajat o\'chirilsinmi? Balanslar qayta hisoblanadi.');">
+        <button type="submit" class="btn btn-icon btn-ghost" title="O'chirish" aria-label="{{ e.description }} xarajatini o'chirish">{{ icon('trash-2', 'icon-sm') }}</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="icon-wrap">{{ icon('receipt') }}</div>
+    <p>Hali xarajat yo'q. Yuqoridagi forma orqali birinchi xarajatni qo'shing.</p>
+  </div>
+  {% endfor %}
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Xarajatlar sahifalari">
+    {% if page > 1 %}<a class="btn btn-sm btn-soft" href="?page={{ page - 1 }}#expenses">{{ icon('chevron-left', 'icon-sm') }} Oldingi</a>{% endif %}
+    <span class="muted small">{{ page }} / {{ pages }}</span>
+    {% if page < pages %}<a class="btn btn-sm btn-soft" href="?page={{ page + 1 }}#expenses">Keyingi {{ icon('arrow-right', 'icon-sm') }}</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
 
 <section class="card-se mt-4">
   <div class="card-head">
@@ -221,3 +360,5 @@
   {% endif %}
 </section>
 {% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', path='group.js') }}"></script>{% endblock %}

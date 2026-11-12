@@ -21,6 +21,9 @@ Loyiha "Dasturiy ta'minot loyihalash va testlash" fanidan amaliy loyiha sifatida
 
 ## Imkoniyatlar
 
+- **Mehmon rejimi:** tezkor hisob ro'yxatdan o'tmasdan ishlaydi, lekin ma'lumotlar saqlanmaydi
+  (tepada ogohlantirish chiqadi). Ro'yxatdan o'tgach, mehmon kiritgan hisob yangi profilga
+  ko'chiriladi va keyingi barcha o'zgarishlar bazaga avtomatik saqlanadi
 - Ro'yxatdan o'tish va kirish (parollar xeshlangan, JWT token)
 - Guruh yaratish, a'zo qo'shish va chiqarish
 - Xarajat qo'shish va uni 4 xil usulda bo'lish:
@@ -91,7 +94,7 @@ split-easy/
 │   ├── templates/      # Jinja2 shablonlar
 │   ├── static/         # CSS va JS
 │   └── main.py
-├── migrations/         # Alembic migratsiyalari (0001–0005)
+├── migrations/         # Alembic migratsiyalari (0001–0006)
 ├── scripts/            # seed.py, benchmark.py, draw_erd.py
 ├── docs/               # texnik topshiriq, DB.md, ERD, schema.sql, benchmark.md
 ├── tests/
