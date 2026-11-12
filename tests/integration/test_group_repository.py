@@ -60,7 +60,7 @@ def test_members_and_listing(repo, users) -> None:
     assert repo.is_member(newer.id, ramazon.id)
     assert not repo.is_member(older.id, ramazon.id)
 
-    repo.remove_member(newer.id, ramazon.id)
+    repo.remove_member(newer.id, ramazon.id, NOW)  # no history -> row deleted
 
     assert not repo.is_member(newer.id, ramazon.id)
     assert repo.list_for_user(ramazon.id) == []

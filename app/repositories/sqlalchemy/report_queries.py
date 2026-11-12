@@ -48,6 +48,7 @@ LEFT JOIN (SELECT to_user_id AS user_id, SUM(amount) AS received
            WHERE group_id = :group_id
            GROUP BY to_user_id) AS r ON r.user_id = gm.user_id
 WHERE gm.group_id = :group_id
+  AND gm.left_at IS NULL  -- members who left have balance 0 (FR-7)
 ORDER BY gm.user_id
 """
 
@@ -102,6 +103,7 @@ SELECT gm.user_id, u.username, gm.joined_at
 FROM group_members AS gm
 JOIN users AS u ON u.id = gm.user_id
 WHERE gm.group_id = :group_id
+  AND gm.left_at IS NULL
   AND NOT EXISTS (SELECT 1
                   FROM expenses AS e
                   WHERE e.group_id = gm.group_id
@@ -157,6 +159,7 @@ WITH my_groups AS (
     FROM group_members AS gm
     JOIN groups AS g ON g.id = gm.group_id
     WHERE gm.user_id = :user_id
+      AND gm.left_at IS NULL
       AND g.is_deleted = 0
 ),
 movements AS (

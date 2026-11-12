@@ -79,6 +79,9 @@ class GroupMemberORM(Base):
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # FR-7: a member with financial history whose balance is 0 "leaves": the
+    # row stays (expenses and settlements point to it), only left_at is set.
+    left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ExpenseORM(Base):

@@ -3,9 +3,11 @@
     poetry run python scripts/seed.py            # once: builds spliteasy-seed.db
     poetry run python scripts/benchmark.py       # writes docs/benchmark.md
 
-For each state the schema is moved with Alembic - ``0003`` has no query
-indexes, ``head`` has them (migration 0004) - then ``ANALYZE`` refreshes the
-planner statistics. Every query runs once to warm the cache and then ``--runs``
+The database is migrated to ``head``. For the "without indexes" state every
+query index (``ix_*``, migrations 0004/0005) is dropped inside a transaction,
+measured, and the transaction is rolled back - SQLite DDL is transactional, so
+the indexes come back untouched. ``ANALYZE`` refreshes the planner statistics
+in both states. Every query runs once to warm the cache and then ``--runs``
 times (default 7); the table shows the average. ``EXPLAIN QUERY PLAN`` is saved
 for every query in both states. The database is left at ``head``.
 """
@@ -25,7 +27,8 @@ if __package__ in (None, ""):
 from app.repositories.sqlalchemy import report_queries as reports
 from scripts.common import ROOT, migrate
 
-STATES = {"Indekssiz": "0003", "Indeks bilan": "head"}
+NO_INDEXES, WITH_INDEXES = "Indekssiz", "Indeks bilan"
+STATES = (NO_INDEXES, WITH_INDEXES)
 
 
 @dataclass(frozen=True)
@@ -128,12 +131,27 @@ def measure(connection: sqlite3.Connection, query: Query, runs: int) -> float:
     return statistics.mean(timings)
 
 
+def _drop_query_indexes(connection: sqlite3.Connection) -> None:
+    names = [
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'ix_%'"
+        )
+    ]
+    for name in names:
+        connection.execute(f'DROP INDEX "{name}"')  # names come from the catalog
+
+
 def run(db_path: Path, runs: int = 7) -> dict:
+    migrate(db_path, "head")
     results: dict = {"runs": runs, "states": {}}
-    for label, revision in STATES.items():
-        migrate(db_path, revision)
-        connection = sqlite3.connect(db_path)
+    for label in STATES:
+        # Autocommit mode: BEGIN / ROLLBACK are sent exactly as written.
+        connection = sqlite3.connect(db_path, isolation_level=None)
         try:
+            if label == NO_INDEXES:
+                connection.execute("BEGIN")
+                _drop_query_indexes(connection)
             connection.execute("ANALYZE")
             params = _pick_params(connection)
             results["params"] = params
@@ -142,6 +160,8 @@ def run(db_path: Path, runs: int = 7) -> dict:
                 for q in queries(params)
             ]
         finally:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")  # the indexes come back
             connection.close()
     return results
 

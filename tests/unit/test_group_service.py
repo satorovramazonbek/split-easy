@@ -3,29 +3,42 @@ from datetime import UTC, datetime
 import pytest
 
 from app.domain.models import User
+from app.repositories.in_memory import (
+    InMemoryBalanceReader,
+    InMemoryUnitOfWork,
+    InMemoryUserRepository,
+)
 from app.services.group_service import (
     AlreadyMemberError,
     GroupNotFoundError,
     GroupPermissionError,
     GroupService,
     InvalidGroupError,
+    MemberHasDebtError,
     MemberNotFoundError,
     OwnerCannotLeaveError,
     UserNotFoundError,
 )
-from tests.unit.fakes import InMemoryGroupRepository, InMemoryUserRepository
 
 NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture
-def users() -> InMemoryUserRepository:
-    return InMemoryUserRepository()
+def uow() -> InMemoryUnitOfWork:
+    """All in-memory repositories, sharing one set of data."""
+    return InMemoryUnitOfWork()
 
 
 @pytest.fixture
-def service(users: InMemoryUserRepository) -> GroupService:
-    return GroupService(InMemoryGroupRepository(), users, clock=lambda: NOW)
+def users(uow: InMemoryUnitOfWork) -> InMemoryUserRepository:
+    return uow.users
+
+
+@pytest.fixture
+def service(uow: InMemoryUnitOfWork) -> GroupService:
+    return GroupService(
+        uow.groups, uow.users, InMemoryBalanceReader(uow), clock=lambda: NOW
+    )
 
 
 def make_user(users: InMemoryUserRepository, username: str) -> User:
@@ -190,3 +203,57 @@ def test_only_owner_deletes_group(service, aziza, ramazon) -> None:
 
     with pytest.raises(GroupNotFoundError):
         service.get_group(aziza, group.id)
+
+
+# --- FR-7: remove a member only when their balance is 0 -------------------------
+
+
+def _shared_expense(uow, group_id: int, payer: User, other: User) -> None:
+    """payer paid 100 000 for both: other owes 50 000."""
+    from unittest.mock import Mock
+
+    from app.domain.split_strategies import Participant
+    from app.services.expense_service import ExpenseData, ExpenseService
+
+    ExpenseService(uow, Mock(), clock=lambda: NOW).add_expense(
+        payer,
+        group_id,
+        ExpenseData(
+            description="Ovqat",
+            amount=100_000,
+            paid_by=payer.id,
+            split_type="equal",
+            participants=[Participant(payer.id), Participant(other.id)],
+        ),
+    )
+
+
+def test_member_with_non_zero_balance_cannot_be_removed(
+    service, uow, aziza, ramazon
+) -> None:
+    group = service.create_group(aziza, "Sayohat").group
+    service.add_member(aziza, group.id, "ramazon")
+    _shared_expense(uow, group.id, aziza, ramazon)
+
+    with pytest.raises(MemberHasDebtError):
+        service.remove_member(aziza, group.id, ramazon.id)
+
+    assert uow.groups.is_member(group.id, ramazon.id)
+
+
+def test_member_with_history_and_zero_balance_leaves_and_can_come_back(
+    service, uow, aziza, ramazon
+) -> None:
+    from app.domain.models import Settlement
+
+    group = service.create_group(aziza, "Sayohat").group
+    service.add_member(aziza, group.id, "ramazon")
+    _shared_expense(uow, group.id, aziza, ramazon)
+    uow.settlements.add(Settlement(None, group.id, ramazon.id, aziza.id, 50_000, NOW))
+
+    service.remove_member(aziza, group.id, ramazon.id)
+
+    assert not uow.groups.is_member(group.id, ramazon.id)
+    assert (group.id, ramazon.id) in uow.groups.left  # history is kept
+    service.add_member(aziza, group.id, "ramazon")  # may be added again
+    assert uow.groups.is_member(group.id, ramazon.id)

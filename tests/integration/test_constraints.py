@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 from app.domain.models import User
 from app.repositories.sqlalchemy.group_repository import SqlAlchemyGroupRepository
 from app.repositories.sqlalchemy.orm_models import ExpenseORM, SettlementORM
+from app.repositories.sqlalchemy.report_repository import SqlAlchemyReportRepository
 from app.repositories.sqlalchemy.user_repository import SqlAlchemyUserRepository
-from app.services.group_service import GroupService, MemberHasHistoryError
+from app.services.group_service import GroupService, MemberHasDebtError
 
 NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
 
@@ -32,7 +33,12 @@ def world(session: Session) -> dict[str, int]:
         ).id
         for name in ("aziza", "ramazon", "ali")
     }
-    service = GroupService(SqlAlchemyGroupRepository(session), users, lambda: NOW)
+    service = GroupService(
+        SqlAlchemyGroupRepository(session),
+        users,
+        SqlAlchemyReportRepository(session),
+        lambda: NOW,
+    )
     owner = users.get_by_id(ids["aziza"])
     ids["group"] = service.create_group(owner, "Sayohat").group.id
     service.add_member(owner, ids["group"], "ramazon")
@@ -161,7 +167,7 @@ def test_group_with_expenses_cannot_be_hard_deleted(session: Session, world) -> 
 
 
 @pytest.mark.parametrize("record", ["expense", "share", "settlement"])
-def test_member_with_history_cannot_be_removed(
+def test_member_with_debt_cannot_be_removed(
     session: Session, world, record: str
 ) -> None:
     if record == "expense":
@@ -179,10 +185,15 @@ def test_member_with_history_cannot_be_removed(
     else:
         add_settlement(session, world)
     users = SqlAlchemyUserRepository(session)
-    service = GroupService(SqlAlchemyGroupRepository(session), users, lambda: NOW)
+    service = GroupService(
+        SqlAlchemyGroupRepository(session),
+        users,
+        SqlAlchemyReportRepository(session),
+        lambda: NOW,
+    )
     owner = users.get_by_id(world["aziza"])
 
-    with pytest.raises(MemberHasHistoryError):
+    with pytest.raises(MemberHasDebtError):  # FR-7: balance is not 0
         service.remove_member(owner, world["group"], world["ramazon"])
 
     # The failed delete was rolled back to its savepoint; the member is still there.

@@ -1,5 +1,6 @@
 """Group storage abstraction used by ``GroupService``."""
 
+from datetime import datetime
 from typing import Protocol
 
 from app.domain.models import Group, GroupMember
@@ -7,11 +8,6 @@ from app.domain.models import Group, GroupMember
 
 class DuplicateMemberError(Exception):
     """The user is already a member of the group."""
-
-
-class MemberHasRecordsError(Exception):
-    """The member paid an expense, has a share in one or took part in a
-    settlement in this group."""
 
 
 class GroupRepository(Protocol):
@@ -27,12 +23,17 @@ class GroupRepository(Protocol):
     def mark_deleted(self, group_id: int) -> None: ...
 
     def add_member(self, member: GroupMember) -> GroupMember:
-        """Raises ``DuplicateMemberError`` if the user is already a member."""
+        """Add (or bring back a member who left).
 
-    def remove_member(self, group_id: int, user_id: int) -> None:
-        """Raises ``MemberHasRecordsError`` if the member has financial history."""
+        Raises ``DuplicateMemberError`` if the user is already an active member.
+        """
 
-    def is_member(self, group_id: int, user_id: int) -> bool: ...
+    def remove_member(self, group_id: int, user_id: int, at: datetime) -> None:
+        """Delete the membership, or mark it as left at ``at`` if the member has
+        expenses, shares or settlements in the group (their history stays)."""
+
+    def is_member(self, group_id: int, user_id: int) -> bool:
+        """True only for active members (not those who left)."""
 
     def list_members(self, group_id: int) -> list[GroupMember]:
-        """Members in the order they joined."""
+        """Active members in the order they joined."""

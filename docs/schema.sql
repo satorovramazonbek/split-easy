@@ -42,6 +42,7 @@ CREATE TABLE group_members (
     group_id  INTEGER  NOT NULL,
     user_id   INTEGER  NOT NULL,
     joined_at DATETIME NOT NULL,
+    left_at   DATETIME,
     CONSTRAINT pk_group_members PRIMARY KEY (group_id, user_id),
     CONSTRAINT fk_group_members_group_id_groups FOREIGN KEY (group_id)
         REFERENCES groups (id) ON DELETE CASCADE,
