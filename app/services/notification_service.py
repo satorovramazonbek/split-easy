@@ -29,14 +29,12 @@ class NotificationService:
     def unread_count(self, user: User) -> int:
         return self._notifications.count_unread(user.id)
 
-    def mark_read(self, user: User, notification_id: int) -> None:
+    def mark_read(self, user: User, notification_id: int) -> Notification:
+        """Mark one notification as read and return it (FR-23)."""
         if not self._notifications.mark_read(notification_id, user.id):
             raise NotificationNotFoundError("Bildirishnoma topilmadi")
+        return self._notifications.get_for_user(notification_id, user.id)
 
     def mark_all_read(self, user: User) -> int:
-        unread = self._notifications.list_for_user(
-            user.id, unread_only=True, limit=1000
-        )
-        for notification in unread:
-            self._notifications.mark_read(notification.id, user.id)
-        return len(unread)
+        """One UPDATE for all unread notifications of the user."""
+        return self._notifications.mark_all_read(user.id)

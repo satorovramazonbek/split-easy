@@ -15,5 +15,11 @@ class NotificationRepository(Protocol):
 
     def count_unread(self, user_id: int) -> int: ...
 
+    def get_for_user(self, notification_id: int, user_id: int) -> Notification | None:
+        """The notification if it belongs to the user, otherwise None."""
+
     def mark_read(self, notification_id: int, user_id: int) -> bool:
         """Only the owner can mark it; returns False if it is not theirs."""
+
+    def mark_all_read(self, user_id: int) -> int:
+        """Mark every unread notification of the user; returns how many."""
