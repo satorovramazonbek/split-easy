@@ -210,7 +210,13 @@ def test_settle_from_page(aziza: TestClient, db_client) -> None:
         f"/groups/{group_id}/settlements",
         data={"from_user_id": other, "to_user_id": other, "amount": 5},
     )
-    assert "To&#39;lov ma&#39;lumotlari noto&#39;g&#39;ri" in bad.text
+    assert "To&#39;lov saqlanmadi" in bad.text
+    # a second click on the same "To'landi" is refused: nothing is owed now
+    again = ramazon.post(
+        f"/groups/{group_id}/settlements",
+        data={"from_user_id": other, "to_user_id": me, "amount": 50000},
+    )
+    assert "To&#39;lov saqlanmadi" in again.text
 
 
 def test_settlement_by_outsider_party_is_forbidden(
@@ -285,3 +291,120 @@ def test_notifications_page_and_badge(aziza: TestClient, db_client) -> None:
 def test_notifications_page_requires_login(db_client: TestClient) -> None:
     response = db_client.get("/notifications", follow_redirects=False)
     assert response.status_code == 303
+
+
+# --- edit (FR-12), filter (FR-14), export (FR-24), FR-7 on the pages ---------------
+
+
+def _one_expense(client: TestClient, group_id: int, me: int, **extra: str) -> int:
+    client.post(
+        f"/groups/{group_id}/expenses",
+        data={
+            "description": "Non",
+            "amount": "6000",
+            "paid_by": str(me),
+            "participants": [str(me)],
+            **extra,
+        },
+    )
+    token = client.cookies.get("spliteasy_token")
+    return client.get(
+        f"/api/groups/{group_id}/expenses",
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()["items"][0]["id"]
+
+
+def test_edit_expense_page(aziza: TestClient) -> None:
+    group_id = create_group(aziza)
+    me = user_id(aziza)
+    expense_id = _one_expense(aziza, group_id, me)
+
+    form = aziza.get(f"/groups/{group_id}/expenses/{expense_id}/edit")
+    assert form.status_code == 200
+    assert 'value="Non"' in form.text and 'value="6000"' in form.text
+
+    saved = aziza.post(
+        f"/groups/{group_id}/expenses/{expense_id}/edit",
+        data={
+            "description": "Non va choy",
+            "amount": "9000",
+            "paid_by": str(me),
+            "split_type": "equal",
+            "participants": [str(me)],
+        },
+    )
+    assert "Xarajat yangilandi" in saved.text
+    assert "Non va choy" in saved.text
+
+    bad = aziza.post(
+        f"/groups/{group_id}/expenses/{expense_id}/edit",
+        data={"description": "X", "amount": "0", "paid_by": str(me)},
+    )
+    assert bad.status_code == 400
+    missing = aziza.get(f"/groups/{group_id}/expenses/999/edit")
+    assert "Xarajat topilmadi" in missing.text
+
+
+def test_member_cannot_edit_others_expense(aziza: TestClient, db_client) -> None:
+    ramazon = other_client(db_client, "ramazon")
+    group_id = create_group(aziza)
+    add_member(aziza, group_id, "ramazon")
+    me = user_id(aziza)
+    expense_id = _one_expense(aziza, group_id, me)
+
+    response = ramazon.post(
+        f"/groups/{group_id}/expenses/{expense_id}/edit",
+        data={
+            "description": "X",
+            "amount": "1",
+            "paid_by": str(me),
+            "participants": [str(me)],
+        },
+    )
+    assert "faqat uni qo&#39;shgan" in response.text
+
+
+def test_category_filter_on_the_page(aziza: TestClient) -> None:
+    group_id = create_group(aziza)
+    me = user_id(aziza)
+    _one_expense(aziza, group_id, me, category="food", description="Palov")
+    _one_expense(aziza, group_id, me, category="transport", description="Taksi")
+
+    page = aziza.get(f"/groups/{group_id}?category=transport").text
+    unknown = aziza.get(f"/groups/{group_id}?category=cars")
+
+    expenses_part = page.split('id="expenses"')[1].split("Hisobotlar")[0]
+    assert ">Taksi<" in expenses_part and ">Palov<" not in expenses_part
+    assert unknown.status_code == 200  # falls back to all categories
+
+
+def test_export_from_the_page(aziza: TestClient) -> None:
+    group_id = create_group(aziza)
+    _one_expense(aziza, group_id, user_id(aziza))
+
+    csv_file = aziza.get(f"/groups/{group_id}/export?format=csv")
+    fallback = aziza.get(f"/groups/{group_id}/export?format=xml")
+
+    assert csv_file.headers["content-type"].startswith("text/csv")
+    assert "Non" in csv_file.text
+    assert fallback.headers["content-type"].startswith("text/csv")
+
+
+def test_remove_member_with_debt_shows_message(aziza: TestClient, db_client) -> None:
+    ramazon = other_client(db_client, "ramazon")
+    group_id = create_group(aziza)
+    add_member(aziza, group_id, "ramazon")
+    me, other = user_id(aziza), user_id(ramazon)
+    aziza.post(
+        f"/groups/{group_id}/expenses",
+        data={
+            "description": "Ovqat",
+            "amount": "1000",
+            "paid_by": str(me),
+            "participants": [str(me), str(other)],
+        },
+    )
+
+    response = aziza.post(f"/groups/{group_id}/members/{other}/remove")
+
+    assert "balansi 0 emas" in response.text
