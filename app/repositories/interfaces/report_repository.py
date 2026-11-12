@@ -84,8 +84,15 @@ class UserOverview:
     totals: list[CurrencyTotals]
 
 
-class ReportRepository(Protocol):
-    def member_balances(self, group_id: int) -> list[MemberBalance]: ...
+class BalanceReader(Protocol):
+    """Only the balances (ISP): settlement and group services need nothing else."""
+
+    def member_balances(self, group_id: int) -> list[MemberBalance]:
+        """Net balance of every active member; the values add up to 0."""
+
+
+class ReportRepository(BalanceReader, Protocol):
+    """All reports, for the report pages and API."""
 
     def category_totals(self, group_id: int) -> list[CategoryTotal]: ...
 

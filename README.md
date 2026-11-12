@@ -13,6 +13,7 @@ Loyiha "Dasturiy ta'minot loyihalash va testlash" fanidan amaliy loyiha sifatida
 - [Arxitektura](#arxitektura)
 - [Loyiha tuzilmasi](#loyiha-tuzilmasi)
 - [O'rnatish va ishga tushirish](#ornatish-va-ishga-tushirish)
+- [API](#api)
 - [Jamoa](#jamoa)
 - [Ish jarayoni (Git)](#ish-jarayoni-git)
 - [Hujjatlar](#hujjatlar)
@@ -25,16 +26,17 @@ Loyiha "Dasturiy ta'minot loyihalash va testlash" fanidan amaliy loyiha sifatida
   (tepada ogohlantirish chiqadi). Ro'yxatdan o'tgach, mehmon kiritgan hisob yangi profilga
   ko'chiriladi va keyingi barcha o'zgarishlar bazaga avtomatik saqlanadi
 - Ro'yxatdan o'tish va kirish (parollar xeshlangan, JWT token)
-- Guruh yaratish, a'zo qo'shish va chiqarish
-- Xarajat qo'shish va uni 4 xil usulda bo'lish:
+- Guruh yaratish, a'zo qo'shish; a'zoni chiqarish — faqat balansi 0 bo'lsa (FR-7)
+- Xarajat qo'shish, **tahrirlash** va o'chirish (muallif yoki guruh egasi) va uni 4 xil usulda bo'lish:
   - **teng** — summa ishtirokchilar soniga teng bo'linadi;
   - **aniq summalar** — har bir ishtirokchi uchun summa qo'lda kiritiladi;
   - **foiz bo'yicha** — foizlar yig'indisi 100 bo'lishi shart;
   - **ulushlar bo'yicha** — summa ulushlarga proporsional bo'linadi.
+- Xarajatlar ro'yxati: sana bo'yicha, sahifalab, kategoriya bo'yicha filtr
 - Har bir a'zoning sof balansi va eng kam o'tkazmali hisob-kitob rejasi
-- To'lovni "to'landi" deb belgilash
-- Ilova ichidagi bildirishnomalar
-- Xarajatlarni CSV va JSON formatida eksport qilish
+- To'lovni "to'landi" deb belgilash (summa qarzdan oshmaydi)
+- Bildirishnomalar — Observer orqali: ilova ichida va email (ishlab chiqishda fake, logga yoziladi)
+- Xarajatlarni **CSV va JSON** formatida eksport qilish (Factory, yangi format osongina qo'shiladi)
 
 Pul summalari faqat butun son (`int`, so'mda) bilan hisoblanadi — `float` ishlatilmaydi.
 
@@ -83,18 +85,20 @@ Qo'llanilgan design patternlar: **Strategy**, **Factory**, **Repository**, **Obs
 split-easy/
 ├── .github/workflows/  # CI: ruff, black, pytest --cov-fail-under=80
 ├── app/
-│   ├── domain/         # sof Python: modellar, pul, bo'lish strategiyalari, balans, hisob-kitob
-│   ├── services/       # biznes mantiq (Auth, Group, Report, QuickSplit)
+│   ├── domain/         # sof Python: modellar, pul, strategiyalar, balans, reja, hodisalar (events)
+│   ├── services/       # biznes mantiq (Auth, Group, Expense, Settlement, Export, Notifiers, ...)
 │   ├── repositories/
 │   │   ├── interfaces/ # abstrakt repository'lar va Unit of Work
-│   │   └── sqlalchemy/ # ORM modellari, repository'lar, Unit of Work, xom SQL hisobotlar
+│   │   ├── sqlalchemy/ # ORM modellari, repository'lar, Unit of Work, xom SQL hisobotlar
+│   │   └── in_memory.py # ikkinchi implementatsiya (testlar uchun)
+│   ├── exporters/      # CSV, JSON eksport va ExporterFactory
 │   ├── infrastructure/ # sozlamalar, baza ulanishi, parol xeshlash va JWT
 │   ├── api/            # FastAPI routerlar (/api/...)
-│   ├── web/            # Jinja2 sahifalar uchun routerlar
+│   ├── web/            # Jinja2 sahifalar: auth, group, expense, notification
 │   ├── templates/      # Jinja2 shablonlar
 │   ├── static/         # CSS va JS
 │   └── main.py
-├── migrations/         # Alembic migratsiyalari (0001–0006)
+├── migrations/         # Alembic migratsiyalari (0001–0007)
 ├── scripts/            # seed.py, benchmark.py, draw_erd.py
 ├── docs/               # texnik topshiriq, DB.md, ERD, schema.sql, benchmark.md
 ├── tests/
@@ -176,6 +180,40 @@ poetry run python scripts/benchmark.py     # indekssiz / indeks bilan -> docs/be
 
 Seed deterministik (`--seed 42`), barcha foydalanuvchilar paroli `secret123`. Natijalar
 tahlili: [`docs/DB.md`](docs/DB.md), 5-bo'lim.
+
+---
+
+## API
+
+To'liq interaktiv hujjat: http://127.0.0.1:8000/docs (Swagger). Kirish va ro'yxatdan
+o'tishdan boshqa barcha endpointlar `Authorization: Bearer <token>` talab qiladi.
+
+| Metod | Yo'l | Tavsif | Kod |
+|---|---|---|---|
+| POST | `/api/auth/register` | Ro'yxatdan o'tish | 201 |
+| POST | `/api/auth/login` | Kirish, token qaytaradi | 200 |
+| GET, PATCH | `/api/auth/me` | Profil, ismni o'zgartirish (FR-4) | 200 |
+| GET, POST | `/api/groups` | Mening guruhlarim, guruh yaratish | 200, 201 |
+| GET, DELETE | `/api/groups/{id}` | Guruh, o'chirish (soft delete) | 200, 204 |
+| POST | `/api/groups/{id}/members` | A'zo qo'shish (faqat egasi) | 201 |
+| DELETE | `/api/groups/{id}/members/{user_id}` | A'zoni chiqarish (balans 0 bo'lsa) | 204 |
+| GET | `/api/groups/{id}/expenses?page=&category=` | Xarajatlar ro'yxati | 200 |
+| POST | `/api/groups/{id}/expenses` | Xarajat qo'shish | 201 |
+| GET, PUT, DELETE | `/api/groups/{id}/expenses/{eid}` | Ko'rish, tahrirlash, o'chirish | 200, 200, 204 |
+| GET | `/api/groups/{id}/balances` | A'zolar balanslari | 200 |
+| GET | `/api/groups/{id}/settle-plan` | Hisob-kitob rejasi | 200 |
+| GET, POST | `/api/groups/{id}/settlements` | To'lovlar tarixi, to'lovni qayd etish | 200, 201 |
+| GET | `/api/groups/{id}/export?format=csv\|json` | Eksport | 200 |
+| GET | `/api/groups/{id}/reports/...` | Xom SQL hisobotlar (kategoriya, oylar, ...) | 200 |
+| GET | `/api/reports/overview` | Barcha guruhlar bo'yicha umumiy holat | 200 |
+| GET | `/api/notifications` | Mening bildirishnomalarim | 200 |
+| PATCH | `/api/notifications/{id}/read` | O'qildi deb belgilash | 200 |
+| POST | `/api/notifications/read-all` | Hammasini o'qildi deb belgilash | 200 |
+| POST | `/api/calculate`, `/api/expenses/preview` | Tezkor hisob (mehmon, saqlanmaydi) | 200 |
+| GET, PUT, DELETE | `/api/quick-split/draft` | Kirgan foydalanuvchining tezkor hisobi | 200, 200, 204 |
+
+Xato kodlari: `400` noto'g'ri ma'lumot, `401` token yo'q, `403` ruxsat yo'q, `404` topilmadi,
+`409` ziddiyat (email band, balansi 0 bo'lmagan a'zo), `422` so'rov formati noto'g'ri.
 
 ---
 

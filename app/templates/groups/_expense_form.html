@@ -1,0 +1,67 @@
+{# Expense form: used to add (group page) and to edit (edit page) an expense.
+   Needs: form_action, submit_label, members, user, f (expense_form), f_split,
+   split_types, categories_choice, today, cur, expense_error. #}
+{% from "_ui.html" import icon, avatar %}
+  {% if expense_error %}
+  <div class="alert alert-danger py-2" role="alert">{{ icon('triangle-alert', 'icon-sm') }} {{ expense_error }}</div>
+  {% endif %}
+  <form method="post" action="{{ form_action }}" class="expense-form" id="groupExpenseForm" autocomplete="off">
+    <div class="row g-3">
+      <div class="col-md-7">
+        <label for="ge-description" class="form-label">Tavsif</label>
+        <input type="text" id="ge-description" name="description" class="form-control" placeholder="Masalan: Ovqat, Taksi" maxlength="200" value="{{ f.description or '' }}" required>
+      </div>
+      <div class="col-md-5">
+        <label for="ge-amount" class="form-label">Summa ({{ cur }})</label>
+        <input type="number" id="ge-amount" name="amount" class="form-control" placeholder="0" min="1" step="1" inputmode="numeric" value="{{ f.amount or '' }}" required>
+      </div>
+      <div class="col-md-6">
+        <label for="ge-paid-by" class="form-label">Kim to'ladi</label>
+        <select id="ge-paid-by" name="paid_by" class="form-select" required>
+          {% for m in members %}
+          <option value="{{ m.user_id }}" {{ 'selected' if (f.paid_by or user.id) == m.user_id }}>{{ m.username }}{{ ' (siz)' if m.user_id == user.id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label for="ge-split" class="form-label">Bo'lish usuli</label>
+        <select id="ge-split" name="split_type" class="form-select">
+          {% for value, label in split_types %}
+          <option value="{{ value }}" {{ 'selected' if f_split == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label for="ge-category" class="form-label">Kategoriya</label>
+        <select id="ge-category" name="category" class="form-select">
+          {% for c in categories_choice %}
+          <option value="{{ c }}" {{ 'selected' if (f.category or 'other') == c }}>{{ c | category }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label for="ge-date" class="form-label">Sana</label>
+        <input type="date" id="ge-date" name="expense_date" class="form-control" value="{{ f.expense_date or today }}" max="{{ today }}">
+      </div>
+      <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="form-label mb-0">Kimlar o'rtasida bo'linadi</span>
+          <button type="button" id="ge-toggle-all" class="btn btn-sm btn-soft">{{ icon('check', 'icon-sm') }} Hammasi</button>
+        </div>
+        <div class="share-list">
+          {% for m in members %}
+          {% set checked = (m.user_id in f.participants) if f.participants is defined else true %}
+          <div class="share-row">
+            <input type="checkbox" class="form-check-input m-0" id="ge-p-{{ m.user_id }}" name="participants" value="{{ m.user_id }}" {{ 'checked' if checked }}>
+            {{ avatar(m.username, 'avatar-sm') }}
+            <label for="ge-p-{{ m.user_id }}">{{ m.username }}</label>
+            <input type="number" class="form-control form-control-sm" name="value_{{ m.user_id }}" min="0" step="any"
+                   aria-label="{{ m.username }} uchun qiymat" value="{{ f.share_values.get(m.user_id, '') if f.share_values is defined else '' }}" {{ 'hidden' if f_split == 'equal' }}>
+          </div>
+          {% endfor %}
+        </div>
+        <div id="ge-hint" class="form-text mt-2"></div>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary mt-3">{{ icon('save') }} {{ submit_label }}</button>
+  </form>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% block title %}Xarajatni tahrirlash · {{ group.name }}{% endblock %}
+{% block nav_groups %}active{% endblock %}
+
+{% block hero %}
+<header class="container page-hero rise">
+  <a href="/groups/{{ group.id }}" class="back-link">{{ icon('chevron-left', 'icon-sm') }} {{ group.name }}</a>
+  <h1>Xarajatni tahrirlash</h1>
+  <p class="lead-sm">Ulushlar qayta hisoblanadi; eski ulushlar bitta tranzaksiyada almashtiriladi.</p>
+</header>
+{% endblock %}
+
+{% block content %}
+{% set cur = group.currency %}
+{% set f = expense_form %}
+{% set f_split = f.split_type or 'equal' %}
+<section class="card-se">
+  {% set form_action = "/groups/" ~ group.id ~ "/expenses/" ~ expense_id ~ "/edit" %}
+  {% set submit_label = "O'zgarishlarni saqlash" %}
+  {% include "groups/_expense_form.html" %}
+</section>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', path='group.js') }}"></script>{% endblock %}

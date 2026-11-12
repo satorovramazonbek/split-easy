@@ -1,4 +1,4 @@
-"""Group expense and settlement API (data is saved in the database)."""
+"""Group expense API: add, list, view, edit, delete (FR-10 - FR-14)."""
 
 from datetime import date, datetime
 from decimal import Decimal
@@ -13,9 +13,10 @@ from app.api.quick_split import (
     MAX_MEMBERS,
     MAX_VALUE,
 )
-from app.domain.models import Category, Expense, Settlement, SplitType
+from app.domain.models import Category, Expense, SplitType
 from app.domain.split_strategies import Participant
 from app.services.expense_service import (
+    DEFAULT_PAGE_SIZE,
     MAX_DESCRIPTION_LENGTH,
     MAX_PAGE_SIZE,
     ExpenseData,
@@ -117,34 +118,9 @@ class ExpenseOut(BaseModel):
 class ExpenseList(BaseModel):
     items: list[ExpenseOut]
     total: int
-    limit: int
-    offset: int
-
-
-class SettlementCreate(BaseModel):
-    from_user_id: int
-    to_user_id: int
-    amount: int = Field(gt=0, le=MAX_AMOUNT)
-
-
-class SettlementOut(BaseModel):
-    id: int
-    group_id: int
-    from_user_id: int
-    to_user_id: int
-    amount: int
-    created_at: datetime
-
-    @classmethod
-    def from_domain(cls, s: Settlement) -> "SettlementOut":
-        return cls(
-            id=s.id,
-            group_id=s.group_id,
-            from_user_id=s.from_user_id,
-            to_user_id=s.to_user_id,
-            amount=s.amount,
-            created_at=s.created_at,
-        )
+    page: int
+    page_size: int
+    pages: int
 
 
 @router.post(
@@ -169,18 +145,27 @@ def list_expenses(
     group_id: int,
     user: CurrentUser,
     expenses: ExpenseServiceDep,
-    limit: int = Query(20, ge=1, le=MAX_PAGE_SIZE),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    category: Category | None = None,
 ) -> ExpenseList:
+    """FR-13: newest first, paginated; FR-14: ``?category=food``."""
     try:
-        page = expenses.list_expenses(user, group_id, limit=limit, offset=offset)
+        result = expenses.list_expenses(
+            user,
+            group_id,
+            page=page,
+            page_size=page_size,
+            category=category.value if category else None,
+        )
     except (ExpenseError, GroupError) as error:
         raise _http_error(error) from error
     return ExpenseList(
-        items=[ExpenseOut.from_domain(e) for e in page.items],
-        total=page.total,
-        limit=page.limit,
-        offset=page.offset,
+        items=[ExpenseOut.from_domain(e) for e in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
     )
 
 
@@ -194,6 +179,23 @@ def get_expense(
         raise _http_error(error) from error
 
 
+@router.put("/expenses/{expense_id}", response_model=ExpenseOut)
+def update_expense(
+    group_id: int,
+    expense_id: int,
+    request: ExpenseCreate,
+    user: CurrentUser,
+    expenses: ExpenseServiceDep,
+) -> ExpenseOut:
+    """FR-12: the author or the group owner edits; shares are recalculated."""
+    try:
+        return ExpenseOut.from_domain(
+            expenses.update_expense(user, group_id, expense_id, request.to_data())
+        )
+    except (ExpenseError, GroupError) as error:
+        raise _http_error(error) from error
+
+
 @router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_expense(
     group_id: int, expense_id: int, user: CurrentUser, expenses: ExpenseServiceDep
@@ -203,36 +205,3 @@ def delete_expense(
     except (ExpenseError, GroupError) as error:
         raise _http_error(error) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.post(
-    "/settlements",
-    response_model=SettlementOut,
-    status_code=status.HTTP_201_CREATED,
-)
-def record_settlement(
-    group_id: int,
-    request: SettlementCreate,
-    user: CurrentUser,
-    expenses: ExpenseServiceDep,
-) -> SettlementOut:
-    try:
-        settlement = expenses.record_settlement(
-            user, group_id, request.from_user_id, request.to_user_id, request.amount
-        )
-    except (ExpenseError, GroupError) as error:
-        raise _http_error(error) from error
-    return SettlementOut.from_domain(settlement)
-
-
-@router.get("/settlements", response_model=list[SettlementOut])
-def list_settlements(
-    group_id: int, user: CurrentUser, expenses: ExpenseServiceDep
-) -> list[SettlementOut]:
-    try:
-        return [
-            SettlementOut.from_domain(s)
-            for s in expenses.list_settlements(user, group_id)
-        ]
-    except (ExpenseError, GroupError) as error:
-        raise _http_error(error) from error

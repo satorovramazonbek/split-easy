@@ -55,6 +55,17 @@ class SqlAlchemyNotificationRepository:
         ).limit(limit)
         return [_to_domain(row) for row in self._session.scalars(statement)]
 
+    def get_for_user(self, notification_id: int, user_id: int) -> Notification | None:
+        row = self._session.scalars(
+            select(NotificationORM)
+            .where(
+                NotificationORM.id == notification_id,
+                NotificationORM.user_id == user_id,
+            )
+            .execution_options(populate_existing=True)
+        ).first()
+        return _to_domain(row) if row else None
+
     def count_unread(self, user_id: int) -> int:
         return self._session.scalar(
             select(func.count()).where(
@@ -74,3 +85,15 @@ class SqlAlchemyNotificationRepository:
             .execution_options(synchronize_session="fetch")
         )
         return result.rowcount == 1
+
+    def mark_all_read(self, user_id: int) -> int:
+        result = self._session.execute(
+            update(NotificationORM)
+            .where(
+                NotificationORM.user_id == user_id,
+                NotificationORM.is_read.is_(False),
+            )
+            .values(is_read=True)
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount

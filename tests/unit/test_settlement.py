@@ -41,3 +41,21 @@ def test_transfers_settle_every_balance() -> None:
 def test_unbalanced_input_is_rejected() -> None:
     with pytest.raises(InvalidSplitError):
         simplify_debts({1: 10, 2: -5})
+
+
+@pytest.mark.parametrize(
+    "balances",
+    [
+        {1: 300, 2: -100, 3: -100, 4: -100},
+        {1: 500, 2: 250, 3: -400, 4: -200, 5: -150},
+        {1: 1, 2: -1},
+        {1: 70, 2: 30, 3: -10, 4: -20, 5: -30, 6: -40},
+    ],
+)
+def test_plan_has_at_most_n_minus_1_transfers(balances: dict[int, int]) -> None:
+    """Spec 12.2: N people with a non-zero balance need at most N - 1 transfers."""
+    non_zero = [b for b in balances.values() if b != 0]
+
+    transfers = simplify_debts(balances)
+
+    assert len(transfers) <= len(non_zero) - 1

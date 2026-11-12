@@ -36,6 +36,7 @@ poetry run alembic downgrade base        # hammasini qaytarish
 | `expense_shares` | Har bir ishtirokchining ulushi | `expenses` 1:N, `users` 1:N |
 | `settlements` | Qarzni yopish to'lovlari | `groups` 1:N, `group_members` 1:N (ikki marta: yuboruvchi, oluvchi) |
 | `notifications` | Ilova ichidagi bildirishnomalar | `users` 1:N |
+| `quick_split_drafts` | Kirgan foydalanuvchining "Tezkor hisob" sahifasi (bitta JSON hujjat) | `users` 1:1 (PK = `user_id`, `ON DELETE CASCADE`) |
 
 Texnik topshiriqdagi ro'yxatdan farqlar:
 
@@ -93,6 +94,29 @@ qiymatlaridan strategiya yordamida qayta hisoblash mumkin. Shunga qaramay saqlan
   `UNIQUE(owner_id, name)` o'chirilgan guruh nomini qayta ishlatishga to'sqinlik qiladi —
   buning o'rniga **qisman indeks** kerak bo'ladi:
   `CREATE UNIQUE INDEX ... ON groups (owner_id, name) WHERE is_deleted = 0`.
+
+### A'zolikdan chiqish: `group_members.left_at` (FR-7, migratsiya `0007`)
+
+- FR-7: a'zo faqat balansi 0 bo'lsa chiqariladi (servis `BalanceReader` orqali tekshiradi).
+- Xarajat yoki to'lov tarixi bor a'zoning qatori **o'chirilmaydi**: `expenses` va `settlements`
+  unga kompozit FK (`ON DELETE RESTRICT`) bilan bog'langan, tarix to'g'ri qolishi kerak.
+  Buning o'rniga `left_at` yoziladi. Tarixi yo'q a'zo esa oddiy `DELETE` bilan o'chiriladi.
+- **So'rovlarga ta'siri:** a'zolar ro'yxati, `is_member`, "mening guruhlarim", 1-, 5- va
+  8-so'rovlar `left_at IS NULL` filtrini qo'shadi. Chiqib ketgan a'zoning balansi 0, shuning
+  uchun 1-so'rovdagi balanslar yig'indisi baribir 0 bo'lib qoladi.
+- **UNIQUE / PK ga ta'siri:** PK `(group_id, user_id)` o'zgarmaydi. A'zo qayta qo'shilganda
+  yangi qator yaratilmaydi, mavjud qatorda `left_at = NULL` qilinadi (aks holda PK buzilardi).
+- **Ustun normalizatsiyaga ta'sir qilmaydi:** `left_at` faqat kalitga — `(group_id, user_id)`
+  ga — bog'liq (3NF).
+
+### Tezkor hisob qoralamasi: `quick_split_drafts` (migratsiya `0006`)
+
+Kirgan foydalanuvchining tezkor hisob sahifasi bitta JSON hujjat sifatida saqlanadi. Bu
+**ongli qaror**: u yerdagi ishtirokchilar ro'yxatdan o'tgan foydalanuvchilar emas, oddiy
+ismlar ("Ali", "Vali"). Shuning uchun ularni `expenses` va `group_members` ga yozib bo'lmaydi
+(FK `users` ga talab qiladi). Hujjat butunligini servis saqlashdan oldin tekshiradi:
+id'lar takrorlanmaydi, har bir xarajat mavjud ishtirokchilarga ishora qiladi va ulushlar
+yig'indisi summaga teng.
 
 ---
 
@@ -185,8 +209,10 @@ UZS va USD guruhlaridagi summalarni qo'shib bo'lmaydi.
 
 PRIMARY KEY va UNIQUE o'z indeksini o'zi yaratadi (`sqlite_autoindex_*`), ular takrorlanmaydi
 (masalan, `users.email` — login so'rovi uchun alohida indeks kerak emas).
-Qo'shimcha indekslar alohida migratsiyalarda (`0004`, `0005`) — benchmark ularni
-`alembic downgrade 0003` / `upgrade head` bilan o'chirib-yoqadi.
+Qo'shimcha indekslar alohida migratsiyalarda (`0004`, `0005`). Benchmark bazani `head` ga
+keltiradi, "indekssiz" holat uchun hamma `ix_*` indekslarni **tranzaksiya ichida**
+`DROP INDEX` qiladi, o'lchaydi va `ROLLBACK` bilan qaytaradi (SQLite'da DDL ham
+tranzaksion). Shu tufayli benchmark keyingi migratsiyalarga bog'liq emas.
 
 | Indeks | So'rov | Ustunlar tartibi nega shunday |
 |---|---|---|
@@ -334,6 +360,8 @@ Testlar (`tests/integration/test_expense_repositories.py`):
 | `0003` | `expenses`, `expense_shares`, `settlements`, `notifications` |
 | `0004` | so'rov indekslari |
 | `0005` | `(group_id, paid_by)` indeksini `amount` bilan covering qilish (o'lchov asosida) |
+| `0006` | `quick_split_drafts` — kirgan foydalanuvchining tezkor hisobi |
+| `0007` | `group_members.left_at` — balansi 0 bo'lgan a'zo tarixi bilan chiqib ketadi (FR-7) |
 
 Har birida `upgrade` va `downgrade` bor. `alembic check` ORM bilan farq yo'qligini
 ko'rsatadi; `test_schema.py` esa `upgrade head`, `downgrade base` va indeks

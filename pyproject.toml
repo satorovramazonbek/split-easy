@@ -41,6 +41,17 @@ addopts = "-v --strict-markers"
 line-length = 88
 target-version = "py312"
 
+[tool.ruff.lint]
+# NFR-3: every function in app/ has type hints (ANN). Tests, migrations and
+# scripts are exempt below.
+extend-select = ["ANN"]
+ignore = ["ANN401"]  # Any is allowed where a value really can be anything
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "F811"]  # pytest fixtures are imported and used as params
+"migrations/**" = ["ANN"]
+"scripts/**" = ["ANN"]
+
 [tool.black]
 line-length = 88
 

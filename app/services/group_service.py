@@ -4,11 +4,13 @@ Access rules (technical specification, section 11):
 - a missing or deleted group -> GroupNotFoundError (404);
 - a user who is not a member -> GroupPermissionError (403);
 - only the owner adds members, removes members and deletes the group;
-- the owner cannot be removed; the owner deletes the group instead (soft delete).
+- the owner cannot be removed; the owner deletes the group instead (soft delete);
+- FR-7: a member is removed only when their balance is 0. A member without
+  history is deleted; one with history is marked as left (history stays).
 """
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -16,8 +18,8 @@ from app.domain.models import Group, GroupMember, User
 from app.repositories.interfaces.group_repository import (
     DuplicateMemberError,
     GroupRepository,
-    MemberHasRecordsError,
 )
+from app.repositories.interfaces.report_repository import BalanceReader
 from app.repositories.interfaces.user_repository import UserRepository
 
 MAX_NAME_LENGTH = 100
@@ -57,8 +59,8 @@ class OwnerCannotLeaveError(GroupError):
     """The owner must delete the group instead of leaving it."""
 
 
-class MemberHasHistoryError(GroupError):
-    """The member has expenses or settlements in the group."""
+class MemberHasDebtError(GroupError):
+    """FR-7: the member's balance is not 0, so they cannot be removed."""
 
 
 def require_member_group(groups: GroupRepository, user: User, group_id: int) -> Group:
@@ -90,10 +92,12 @@ class GroupService:
         self,
         groups: GroupRepository,
         users: UserRepository,
+        balances: BalanceReader,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._groups = groups
         self._users = users
+        self._balances = balances
         self._clock = clock
 
     def create_group(
@@ -160,12 +164,19 @@ class GroupService:
             )
         if not self._groups.is_member(group.id, member_id):
             raise MemberNotFoundError("Bu foydalanuvchi guruhda emas")
-        try:
-            self._groups.remove_member(group.id, member_id)
-        except MemberHasRecordsError as error:
-            raise MemberHasHistoryError(
-                "A'zoning guruhda xarajat yoki to'lovlari bor, uni chiqarib bo'lmaydi"
-            ) from error
+        balances = {
+            b.user_id: b.balance for b in self._balances.member_balances(group.id)
+        }
+        balance = balances.get(member_id, 0)
+        if balance != 0:
+            raise MemberHasDebtError(
+                "A'zoning balansi 0 emas — avval hisob-kitob qilinishi kerak"
+            )
+        self._groups.remove_member(group.id, member_id, self._clock())
+
+    def usernames(self, user_ids: Iterable[int]) -> dict[int, str]:
+        """Names for ids in a group's history (also members who already left)."""
+        return {i: u.username for i, u in self._users.get_many(user_ids).items()}
 
     def _member_group(self, user: User, group_id: int) -> Group:
         return require_member_group(self._groups, user, group_id)

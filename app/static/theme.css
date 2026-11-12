@@ -485,3 +485,5 @@ h1, h2, h3, .h1, .h2, .h3 { letter-spacing: -0.02em; }
 .expense-form .share-row input[type="number"][hidden] { display: none; }
 .settle-form { margin: 0; }
 .pager { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 12px; }
+.filter-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.filter-pills .pill { text-decoration: none; }

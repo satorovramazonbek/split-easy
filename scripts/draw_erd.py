@@ -28,8 +28,9 @@ POSITIONS = {
     "expense_shares": (380, 1110),
     "expenses": (900, 760),
     "settlements": (1330, 700),
+    "quick_split_drafts": (670, 112),
 }
-WIDTH, HEIGHT = 1780, 1290
+WIDTH, HEIGHT = 1780, 1330
 BOX_WIDTH = 380
 ROW = 26
 HEADER = 36

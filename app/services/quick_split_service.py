@@ -7,14 +7,13 @@ so the data disappears when the page is reloaded.
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from decimal import Decimal
 
 from app.domain.balance import calculate_balances
 from app.domain.exceptions import InvalidSplitError
-from app.domain.models import Expense, ExpenseShare, SplitType
+from app.domain.models import Expense, SplitType
 from app.domain.settlement import Transfer, simplify_debts
 from app.domain.split_strategies import Participant
-from app.domain.split_strategy_factory import SplitStrategyFactory
+from app.domain.split_strategy_factory import split_amount
 
 QUICK_GROUP_ID = 0
 
@@ -40,28 +39,6 @@ class SplitResult:
     owed: dict[int, int]
     balances: dict[int, int]
     transfers: list[Transfer]
-
-
-def _normalize_value(
-    split_type: str, value: int | Decimal | None
-) -> int | Decimal | None:
-    """Exact split needs ``int`` amounts; ``Decimal`` such as ``5000`` is converted."""
-    if split_type == SplitType.EXACT.value and isinstance(value, Decimal):
-        if value != value.to_integral_value():
-            raise InvalidSplitError("Exact amounts must be whole numbers")
-        return int(value)
-    return value
-
-
-def split_amount(
-    amount: int, split_type: str, participants: Sequence[Participant]
-) -> list[ExpenseShare]:
-    """Shares for ``amount`` with the chosen strategy (also used by group expenses)."""
-    normalized = [
-        Participant(p.user_id, _normalize_value(split_type, p.value))
-        for p in participants
-    ]
-    return SplitStrategyFactory.create(split_type).split(amount, normalized)
 
 
 class QuickSplitService:

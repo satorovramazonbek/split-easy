@@ -36,17 +36,23 @@ def overview(user: CurrentUser, reports: ReportServiceDep) -> UserOverview:
 
 
 @router.get("/groups/{group_id}/reports/balances", response_model=list[MemberBalance])
-def balances(group_id: int, user: CurrentUser, reports: ReportServiceDep):
+def balances(
+    group_id: int, user: CurrentUser, reports: ReportServiceDep
+) -> list[MemberBalance]:
     return _guarded(lambda: reports.member_balances(user, group_id))
 
 
 @router.get("/groups/{group_id}/reports/categories", response_model=list[CategoryTotal])
-def categories(group_id: int, user: CurrentUser, reports: ReportServiceDep):
+def categories(
+    group_id: int, user: CurrentUser, reports: ReportServiceDep
+) -> list[CategoryTotal]:
     return _guarded(lambda: reports.category_totals(user, group_id))
 
 
 @router.get("/groups/{group_id}/reports/monthly", response_model=list[MonthlyTotal])
-def monthly(group_id: int, user: CurrentUser, reports: ReportServiceDep):
+def monthly(
+    group_id: int, user: CurrentUser, reports: ReportServiceDep
+) -> list[MonthlyTotal]:
     return _guarded(lambda: reports.monthly_totals(user, group_id))
 
 
@@ -56,7 +62,7 @@ def top_payers(
     user: CurrentUser,
     reports: ReportServiceDep,
     limit: int = Query(default=3, ge=1, le=50),
-):
+) -> list[TopPayer]:
     return _guarded(lambda: reports.top_payers(user, group_id, limit))
 
 
@@ -64,7 +70,9 @@ def top_payers(
     "/groups/{group_id}/reports/inactive-members",
     response_model=list[InactiveMember],
 )
-def inactive_members(group_id: int, user: CurrentUser, reports: ReportServiceDep):
+def inactive_members(
+    group_id: int, user: CurrentUser, reports: ReportServiceDep
+) -> list[InactiveMember]:
     return _guarded(lambda: reports.inactive_members(user, group_id))
 
 
@@ -72,7 +80,9 @@ def inactive_members(group_id: int, user: CurrentUser, reports: ReportServiceDep
     "/groups/{group_id}/reports/above-average",
     response_model=list[ExpenseAboveAverage],
 )
-def above_average(group_id: int, user: CurrentUser, reports: ReportServiceDep):
+def above_average(
+    group_id: int, user: CurrentUser, reports: ReportServiceDep
+) -> list[ExpenseAboveAverage]:
     return _guarded(lambda: reports.above_average_expenses(user, group_id))
 
 
@@ -80,5 +90,7 @@ def above_average(group_id: int, user: CurrentUser, reports: ReportServiceDep):
     "/groups/{group_id}/reports/running-total",
     response_model=list[RunningTotalRow],
 )
-def running_total(group_id: int, user: CurrentUser, reports: ReportServiceDep):
+def running_total(
+    group_id: int, user: CurrentUser, reports: ReportServiceDep
+) -> list[RunningTotalRow]:
     return _guarded(lambda: reports.running_total(user, group_id))
