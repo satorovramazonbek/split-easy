@@ -120,7 +120,7 @@ def orm_db(tmp_path: Path) -> Path:
     return db_path
 
 
-def test_all_seven_tables_exist(alembic_db: Path) -> None:
+def test_all_tables_exist(alembic_db: Path) -> None:
     assert set(describe(alembic_db)) == {
         "users",
         "groups",
@@ -129,6 +129,7 @@ def test_all_seven_tables_exist(alembic_db: Path) -> None:
         "expense_shares",
         "settlements",
         "notifications",
+        "quick_split_drafts",
     }
 
 

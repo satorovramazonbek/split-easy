@@ -125,6 +125,18 @@ CREATE TABLE notifications (
         REFERENCES users (id) ON DELETE CASCADE
 );
 
+-- Tezkor hisob qoralamasi (migrations/versions/0006) --------------------------
+-- Kirgan foydalanuvchining "Tezkor hisob" sahifasi: bitta JSON hujjat.
+CREATE TABLE quick_split_drafts (
+    user_id    INTEGER  NOT NULL,
+    data       TEXT     NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT pk_quick_split_drafts PRIMARY KEY (user_id),
+    CONSTRAINT ck_quick_split_drafts_data_not_empty CHECK (length(data) > 0),
+    CONSTRAINT fk_quick_split_drafts_user_id_users FOREIGN KEY (user_id)
+        REFERENCES users (id) ON DELETE CASCADE
+);
+
 -- Indekslar (migrations/versions/0004, 0005; asoslanishi docs/DB.md da) ------
 -- UNIQUE va PRIMARY KEY o'z indeksini o'zi yaratadi, ular bu yerda takrorlanmaydi.
 CREATE INDEX ix_group_members_user_id ON group_members (user_id);
